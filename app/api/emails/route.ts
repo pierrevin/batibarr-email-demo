@@ -39,12 +39,8 @@ export async function GET(req: Request) {
   if (denied) return denied;
 
   const url = new URL(req.url);
-  const limitRaw = url.searchParams.get("limit") ?? "50";
-  const offsetRaw = url.searchParams.get("offset") ?? "0";
   const campagneIdRaw = url.searchParams.get("campagne_id");
 
-  const limit = Math.min(Math.max(Number(limitRaw) || 50, 1), 100);
-  const offset = Math.max(Number(offsetRaw) || 0, 0);
   const campagneId =
     campagneIdRaw && campagneIdRaw.trim().length > 0 ? campagneIdRaw.trim() : null;
 
@@ -55,8 +51,7 @@ export async function GET(req: Request) {
       .schema("preprod")
       .from("batibarr_client_ia")
       .select("id, id_tiers, date_generation, email_brouillon_sujet, descriptif")
-      .order("date_generation", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .order("date_generation", { ascending: false });
 
     if (campagneId) q = q.eq("campagne_id", campagneId);
     q = q.not("descriptif", "is", null).neq("descriptif", "");
@@ -110,10 +105,7 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({
-      items,
-      hasMore: emailRowsTyped.length === limit,
-    });
+    return NextResponse.json({ items, hasMore: false });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },
