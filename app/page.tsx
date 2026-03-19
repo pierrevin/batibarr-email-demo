@@ -1,64 +1,467 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+type Company = {
+  id: string;
+  name: string | null;
+  entity: string | null;
+  address: string | null;
+  town: string | null;
+  state: string | null;
+  country_code: string | null;
+  email: string | null;
+  phone: string | null;
+} | null;
+
+type EmailListItem = {
+  id: string;
+  date_generation: string | null;
+  id_tiers: string | null;
+  email_brouillon_sujet: string | null;
+  company: Company;
+};
+
+type EmailDetail = {
+  id: string;
+  date_generation: string | null;
+  email_brouillon_sujet: string | null;
+  email_brouillon_corps: string | null;
+  email_brouillon_points_cles: string[];
+  company: Company;
+};
+
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.valueOf())) return dateStr;
+  return d.toLocaleString("fr-FR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function fetchJson<T>(url: string, token: string) {
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let message = `Erreur ${res.status}`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data?.error) message = data.error;
+    } catch {
+      // ignore parsing errors
+    }
+    throw new Error(message);
+  }
+  return (await res.json()) as T;
+}
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [tokenInput, setTokenInput] = useState("");
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  const [campaignId, setCampaignId] = useState<string>("");
+  const [limit] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
+  const [items, setItems] = useState<EmailListItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<EmailDetail | null>(null);
+
+  const [listLoading, setListLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [activeRule, setActiveRule] = useState<"first" | "last" | "keep">("first");
+
+  const storedTokenKey = useMemo(() => "batibarr_demo_token", []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storedTokenKey);
+      if (saved) {
+        setAuthToken(saved);
+        setTokenInput(saved);
+      }
+    } catch {
+      // ignore
+    }
+  }, [storedTokenKey]);
+
+  const loadList = useCallback(
+    async (newOffset: number, strategy: "first" | "last" | "keep") => {
+      if (!authToken) return;
+      setListError(null);
+      setListLoading(true);
+      setActiveRule(strategy);
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(newOffset));
+      if (campaignId.trim()) params.set("campagne_id", campaignId.trim());
+
+      try {
+        const data = await fetchJson<{ items: EmailListItem[]; hasMore: boolean }>(
+          `/api/emails?${params.toString()}`,
+          authToken,
+        );
+
+        setItems(data.items);
+        setHasMore(data.hasMore);
+        setOffset(newOffset);
+
+        if (data.items.length === 0) {
+          setSelectedId(null);
+          setDetail(null);
+          return;
+        }
+
+        const keepSelected =
+          strategy === "keep" && selectedId && data.items.some((x) => x.id === selectedId);
+
+        if (keepSelected) {
+          // no-op, selectedId already set
+        } else if (strategy === "last") {
+          setSelectedId(data.items[data.items.length - 1].id);
+        } else {
+          setSelectedId(data.items[0].id);
+        }
+      } catch (e) {
+        setListError(e instanceof Error ? e.message : String(e));
+        setItems([]);
+        setSelectedId(null);
+        setDetail(null);
+        setHasMore(false);
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [authToken, campaignId, limit, selectedId],
+  );
+
+  useEffect(() => {
+    if (!authToken) return;
+    // chargement initial
+    if (items.length === 0) loadList(0, "first");
+  }, [authToken, items.length, loadList]);
+
+  useEffect(() => {
+    if (!authToken || !selectedId) return;
+    setDetailLoading(true);
+    setListError(null);
+
+    const run = async () => {
+      try {
+        const d = await fetchJson<EmailDetail>(`/api/emails/${encodeURIComponent(selectedId)}`, authToken);
+        setDetail(d);
+      } catch (e) {
+        setListError(e instanceof Error ? e.message : String(e));
+        setDetail(null);
+      } finally {
+        setDetailLoading(false);
+      }
+    };
+    run();
+  }, [authToken, selectedId]);
+
+  async function validateTokenAndEnter() {
+    setTokenError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "1");
+      params.set("offset", "0");
+
+      await fetchJson(`/api/emails?${params.toString()}`, tokenInput);
+      localStorage.setItem(storedTokenKey, tokenInput);
+      setAuthToken(tokenInput);
+    } catch (e) {
+      setTokenError(e instanceof Error ? e.message : "Token invalide");
+    }
+  }
+
+  const selectedIndex = useMemo(() => {
+    if (!selectedId) return -1;
+    return items.findIndex((x) => x.id === selectedId);
+  }, [items, selectedId]);
+
+  const atFirst = selectedIndex <= 0;
+  const atLast = selectedIndex >= items.length - 1;
+
+  async function applyCampaign() {
+    await loadList(0, "first");
+  }
+
+  async function goPrev() {
+    if (listLoading) return;
+    const idx = selectedIndex;
+    if (idx > 0) {
+      setSelectedId(items[idx - 1].id);
+      return;
+    }
+    if (offset <= 0) return;
+    const newOffset = Math.max(0, offset - limit);
+    await loadList(newOffset, "last");
+  }
+
+  async function goNext() {
+    if (listLoading) return;
+    const idx = selectedIndex;
+    if (idx >= 0 && idx < items.length - 1) {
+      setSelectedId(items[idx + 1].id);
+      return;
+    }
+    if (!hasMore) return;
+    await loadList(offset + limit, "first");
+  }
+
+  if (!authToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-6">
+        <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6">
+          <h1 className="text-xl font-semibold text-zinc-900">Accès démo</h1>
+          <p className="mt-1 text-sm text-zinc-600">
+            Entrez le token de démonstration (côté serveur via `DEMO_TOKEN`).
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+          <div className="mt-5">
+            <label className="text-sm font-medium text-zinc-700" htmlFor="token">
+              Token
+            </label>
+            <input
+              id="token"
+              className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="••••••••"
+              type="password"
+              autoComplete="off"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            {tokenError ? <p className="mt-2 text-sm text-red-600">{tokenError}</p> : null}
+          </div>
+
+          <button
+            onClick={validateTokenAndEnter}
+            disabled={!tokenInput.trim()}
+            className="mt-5 w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            Documentation
-          </a>
+            Entrer
+          </button>
         </div>
+      </div>
+    );
+  }
+
+  const companyLine = (c: Company) => {
+    if (!c) return "—";
+    const parts = [c.name, c.entity].filter((x) => (x ?? "").trim().length > 0);
+    if (parts.length === 0) return "—";
+    return parts.join(" · ");
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+      <header className="sticky top-0 z-10 bg-zinc-50 border-b border-zinc-200">
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <div className="min-w-0">
+            <div className="text-sm text-zinc-600">Batibarr</div>
+            <div className="text-lg font-semibold leading-tight">Emails IA (démo)</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-700" htmlFor="campagneId">
+                Campagne ID
+              </label>
+              <input
+                id="campagneId"
+                className="w-36 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                value={campaignId}
+                onChange={(e) => setCampaignId(e.target.value)}
+                placeholder="ex: 123"
+                inputMode="numeric"
+              />
+            </div>
+            <button
+              onClick={applyCampaign}
+              disabled={listLoading}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
+            >
+              Charger
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex h-[calc(100vh-56px)]">
+        <section className="w-[420px] border-r border-zinc-200 bg-white flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200">
+            <div className="text-sm font-medium text-zinc-900">
+              {listLoading ? "Chargement…" : `${items.length} email(s)`}
+            </div>
+            <div className="text-xs text-zinc-500">
+              offset {offset} · {activeRule}
+            </div>
+          </div>
+
+          {listError ? <div className="px-4 py-3 text-sm text-red-600">{listError}</div> : null}
+
+          <div className="overflow-auto">
+            {items.length === 0 && !listLoading ? (
+              <div className="px-4 py-6 text-sm text-zinc-600">Aucun email à afficher.</div>
+            ) : null}
+
+            <div className="divide-y divide-zinc-100">
+              {items.map((item) => {
+                const isSelected = item.id === selectedId;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectedId(item.id)}
+                    className={[
+                      "w-full text-left px-4 py-3 hover:bg-zinc-50 transition-colors",
+                      isSelected ? "bg-zinc-100" : "bg-white",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 truncate">
+                          {companyLine(item.company)}
+                        </div>
+                        <div className="mt-1 text-sm text-zinc-700 truncate">
+                          {item.email_brouillon_sujet || "Sans sujet"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-zinc-500 whitespace-nowrap">{formatDate(item.date_generation)}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="flex-1 bg-zinc-50 overflow-auto">
+          <div className="p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm text-zinc-600">Navigation</div>
+                <div className="text-base font-semibold">{detail?.company?.name ?? "Détail email"}</div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goPrev}
+                  disabled={listLoading || (offset <= 0 && atFirst)}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                >
+                  Précédent
+                </button>
+                <button
+                  onClick={goNext}
+                  disabled={listLoading || items.length === 0 || (atLast && !hasMore)}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                >
+                  Suivant
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_420px]">
+              <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-zinc-900">Sujet</div>
+                    <div className="mt-1 text-sm text-zinc-700 break-words">
+                      {detail?.email_brouillon_sujet || "—"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50"
+                      disabled={!detail?.email_brouillon_sujet}
+                      onClick={async () => {
+                        if (!detail?.email_brouillon_sujet) return;
+                        await navigator.clipboard.writeText(detail.email_brouillon_sujet);
+                      }}
+                    >
+                      Copier
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-zinc-900">Corps</div>
+                    <button
+                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50"
+                      disabled={!detail?.email_brouillon_corps}
+                      onClick={async () => {
+                        if (!detail?.email_brouillon_corps) return;
+                        await navigator.clipboard.writeText(detail.email_brouillon_corps);
+                      }}
+                    >
+                      Copier
+                    </button>
+                  </div>
+
+                  <div
+                    className={[
+                      "mt-2 text-sm text-zinc-800 whitespace-pre-wrap break-words rounded-lg border border-zinc-100 p-3 bg-zinc-50",
+                      detailLoading ? "opacity-70" : "opacity-100",
+                    ].join(" ")}
+                    aria-busy={detailLoading}
+                  >
+                    {detail?.email_brouillon_corps || (selectedId ? "—" : "Sélectionnez un email")}
+                  </div>
+                </div>
+              </div>
+
+              <aside className="space-y-4">
+                <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-zinc-900">Points clés / argumentaire</div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {detail?.email_brouillon_points_cles?.length ? (
+                      detail.email_brouillon_points_cles.map((p, i) => (
+                        <div key={`${i}-${p.slice(0, 12)}`} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800">
+                          {p}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-zinc-600">—</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-zinc-900">Société ciblée</div>
+                  <div className="mt-2 text-sm text-zinc-700">
+                    <div className="font-medium text-zinc-900">{detail?.company?.name ?? "—"}</div>
+                    <div className="mt-1">{detail?.company?.entity ?? ""}</div>
+                    <div className="mt-3 text-sm text-zinc-600 whitespace-pre-wrap">
+                      {[detail?.company?.address, detail?.company?.town, detail?.company?.state, detail?.company?.country_code]
+                        .filter((x) => (x ?? "").trim().length > 0)
+                        .join(", ") || ""}
+                    </div>
+                    <div className="mt-3 text-sm text-zinc-600">
+                      {detail?.company?.email ? `Email: ${detail.company.email}` : ""}
+                      {detail?.company?.phone ? ` · Téléphone: ${detail.company.phone}` : ""}
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );

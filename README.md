@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Batibarr - Emails IA (démo)
 
-## Getting Started
+Mini application Next.js pour afficher les emails générés et les infos de la société ciblée.
 
-First, run the development server:
+## Déploiement rapide / prérequis
+
+1. Créez les variables d’environnement (serveur uniquement) :
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `DEMO_TOKEN`
+
+2. Vérifiez que :
+   - `preprod.batibarr_clients_ia` contient les champs utilisés (`email_brouillon_sujet`, `email_brouillon_corps`, `email_brouillon_points_cles`, `date_generation`, `id_tiers`, `campagne_id`)
+   - `public.batibarr_clients` existe (vue) et contient au moins `id`, `name`, `entity`, `address`, `town`, `state`, `country_code`, `email`, `phone`
+
+## Lancer en local
 
 ```bash
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Puis ouvrez : `http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+La page demandera le `DEMO_TOKEN` pour accéder aux endpoints `GET /api/emails*`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Déploiement Vercel
 
-## Learn More
+Importez le dossier `email-demo` dans Vercel et configurez les mêmes variables d’environnement :
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEMO_TOKEN`.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
