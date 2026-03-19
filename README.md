@@ -7,7 +7,9 @@ Mini application Next.js pour afficher les emails générés et les infos de la 
 1. Créez les variables d’environnement (serveur uniquement) :
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `DEMO_TOKEN`
+   - `DEMO_EMAIL`
+   - `DEMO_PASSWORD_HASH`
+   - `DEMO_SESSION_SECRET` (optionnel mais recommandé)
 
 2. Vérifiez que :
    - `preprod.batibarr_clients_ia` contient les champs utilisés (`email_brouillon_sujet`, `email_brouillon_corps`, `email_brouillon_points_cles`, `date_generation`, `id_tiers`, `campagne_id`)
@@ -22,10 +24,10 @@ npm run dev
 
 Puis ouvrez : `http://localhost:3000`
 
-La page demandera le `DEMO_TOKEN` pour accéder aux endpoints `GET /api/emails*`.
+La page demandera un `email + mot de passe` de démonstration.
 
 ## Déploiement Vercel
 
 Importez le dossier `email-demo` dans Vercel et configurez les mêmes variables d’environnement :
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEMO_TOKEN`.
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DEMO_EMAIL`, `DEMO_PASSWORD_HASH`, `DEMO_SESSION_SECRET`.
 

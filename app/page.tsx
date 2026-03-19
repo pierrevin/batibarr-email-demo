@@ -44,12 +44,10 @@ function formatDate(dateStr: string | null) {
   });
 }
 
-async function fetchJson<T>(url: string, token: string) {
+async function fetchJson<T>(url: string) {
   const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -66,9 +64,11 @@ async function fetchJson<T>(url: string, token: string) {
 }
 
 export default function Home() {
-  const [authToken, setAuthToken] = useState<string | null>(null);
-  const [tokenInput, setTokenInput] = useState("");
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [campaignId, setCampaignId] = useState<string>("");
   const [limit] = useState(50);
@@ -84,23 +84,24 @@ export default function Home() {
   const [listError, setListError] = useState<string | null>(null);
   const [activeRule, setActiveRule] = useState<"first" | "last" | "keep">("first");
 
-  const storedTokenKey = useMemo(() => "batibarr_demo_token", []);
-
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storedTokenKey);
-      if (saved) {
-        setAuthToken(saved);
-        setTokenInput(saved);
+    const run = async () => {
+      setAuthLoading(true);
+      try {
+        await fetchJson<{ authenticated: boolean }>("/api/auth/session");
+        setIsAuthenticated(true);
+      } catch {
+        setIsAuthenticated(false);
+      } finally {
+        setAuthLoading(false);
       }
-    } catch {
-      // ignore
-    }
-  }, [storedTokenKey]);
+    };
+    run();
+  }, []);
 
   const loadList = useCallback(
     async (newOffset: number, strategy: "first" | "last" | "keep") => {
-      if (!authToken) return;
+      if (!isAuthenticated) return;
       setListError(null);
       setListLoading(true);
       setActiveRule(strategy);
@@ -113,7 +114,6 @@ export default function Home() {
       try {
         const data = await fetchJson<{ items: EmailListItem[]; hasMore: boolean }>(
           `/api/emails?${params.toString()}`,
-          authToken,
         );
 
         setItems(data.items);
@@ -146,23 +146,23 @@ export default function Home() {
         setListLoading(false);
       }
     },
-    [authToken, campaignId, limit, selectedId],
+    [isAuthenticated, campaignId, limit, selectedId],
   );
 
   useEffect(() => {
-    if (!authToken) return;
+    if (!isAuthenticated) return;
     // chargement initial
     if (items.length === 0) loadList(0, "first");
-  }, [authToken, items.length, loadList]);
+  }, [isAuthenticated, items.length, loadList]);
 
   useEffect(() => {
-    if (!authToken || !selectedId) return;
+    if (!isAuthenticated || !selectedId) return;
     setDetailLoading(true);
     setListError(null);
 
     const run = async () => {
       try {
-        const d = await fetchJson<EmailDetail>(`/api/emails/${encodeURIComponent(selectedId)}`, authToken);
+        const d = await fetchJson<EmailDetail>(`/api/emails/${encodeURIComponent(selectedId)}`);
         setDetail(d);
       } catch (e) {
         setListError(e instanceof Error ? e.message : String(e));
@@ -172,21 +172,44 @@ export default function Home() {
       }
     };
     run();
-  }, [authToken, selectedId]);
+  }, [isAuthenticated, selectedId]);
 
-  async function validateTokenAndEnter() {
-    setTokenError(null);
+  async function login() {
+    setAuthError(null);
+    setAuthLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.set("limit", "1");
-      params.set("offset", "0");
-
-      await fetchJson(`/api/emails?${params.toString()}`, tokenInput);
-      localStorage.setItem(storedTokenKey, tokenInput);
-      setAuthToken(tokenInput);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: emailInput, password: passwordInput }),
+      });
+      if (!res.ok) {
+        let message = `Erreur ${res.status}`;
+        try {
+          const data = (await res.json()) as { error?: string };
+          if (data?.error) message = data.error;
+        } catch {
+          // ignore
+        }
+        throw new Error(message);
+      }
+      setIsAuthenticated(true);
     } catch (e) {
-      setTokenError(e instanceof Error ? e.message : "Token invalide");
+      setIsAuthenticated(false);
+      setAuthError(e instanceof Error ? e.message : "Identifiants invalides");
+    } finally {
+      setAuthLoading(false);
     }
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    setIsAuthenticated(false);
+    setPasswordInput("");
+    setItems([]);
+    setSelectedId(null);
+    setDetail(null);
   }
 
   const selectedIndex = useMemo(() => {
@@ -224,37 +247,60 @@ export default function Home() {
     await loadList(offset + limit, "first");
   }
 
-  if (!authToken) {
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-6">
+        <div className="text-sm text-zinc-600">Chargement…</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-6">
         <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6">
-          <h1 className="text-xl font-semibold text-zinc-900">Accès démo</h1>
+          <h1 className="text-xl font-semibold text-zinc-900">Connexion démo</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            Entrez le token de démonstration (côté serveur via `DEMO_TOKEN`).
+            Entrez votre email et mot de passe de démonstration.
           </p>
 
           <div className="mt-5">
-            <label className="text-sm font-medium text-zinc-700" htmlFor="token">
-              Token
+            <label className="text-sm font-medium text-zinc-700" htmlFor="email">
+              Email
             </label>
             <input
-              id="token"
+              id="email"
               className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="demo@batibarr.fr"
+              type="email"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="text-sm font-medium text-zinc-700" htmlFor="password">
+              Mot de passe
+            </label>
+            <input
+              id="password"
+              className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
               placeholder="••••••••"
               type="password"
               autoComplete="off"
             />
-            {tokenError ? <p className="mt-2 text-sm text-red-600">{tokenError}</p> : null}
+            {authError ? <p className="mt-2 text-sm text-red-600">{authError}</p> : null}
           </div>
 
           <button
-            onClick={validateTokenAndEnter}
-            disabled={!tokenInput.trim()}
+            onClick={login}
+            disabled={!emailInput.trim() || !passwordInput.trim() || authLoading}
             className="mt-5 w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            Entrer
+            Se connecter
           </button>
         </div>
       </div>
@@ -277,7 +323,7 @@ export default function Home() {
             <div className="text-lg font-semibold leading-tight">Emails IA (démo)</div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <div className="flex items-center gap-2">
               <label className="text-sm text-zinc-700" htmlFor="campagneId">
                 Campagne ID
@@ -297,6 +343,12 @@ export default function Home() {
               className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
             >
               Charger
+            </button>
+            <button
+              onClick={logout}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+            >
+              Se déconnecter
             </button>
           </div>
         </div>

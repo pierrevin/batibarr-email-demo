@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { requireDemoToken } from "../../_utils/requireDemoToken";
+import { requireDemoSession } from "../../_utils/requireDemoToken";
 
 type Company = {
   id: string;
@@ -39,7 +39,7 @@ export async function GET(
   req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const denied = requireDemoToken(req);
+  const denied = requireDemoSession(req);
   if (denied) return denied;
 
   const { id } = await context.params;

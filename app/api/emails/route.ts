@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { requireDemoToken } from "../_utils/requireDemoToken";
+import { requireDemoSession } from "../_utils/requireDemoToken";
 
 type Company = {
   id: string;
@@ -34,7 +34,7 @@ type CompanyRow = {
 };
 
 export async function GET(req: Request) {
-  const denied = requireDemoToken(req);
+  const denied = requireDemoSession(req);
   if (denied) return denied;
 
   const url = new URL(req.url);
