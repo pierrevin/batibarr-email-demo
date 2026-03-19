@@ -44,6 +44,12 @@ function formatDate(dateStr: string | null) {
   });
 }
 
+function isLikelyHtml(content: string | null) {
+  if (!content) return false;
+  // Détection simple: balises HTML courantes ou doctype.
+  return /<\/?[a-z][\s\S]*>/i.test(content) || /<!doctype html>/i.test(content);
+}
+
 async function fetchJson<T>(url: string) {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -83,6 +89,7 @@ export default function Home() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [activeRule, setActiveRule] = useState<"first" | "last" | "keep">("first");
+  const [bodyViewMode, setBodyViewMode] = useState<"auto" | "html" | "text">("auto");
 
   useEffect(() => {
     const run = async () => {
@@ -219,6 +226,9 @@ export default function Home() {
 
   const atFirst = selectedIndex <= 0;
   const atLast = selectedIndex >= items.length - 1;
+  const rawBody = detail?.email_brouillon_corps ?? "";
+  const bodyHasHtml = isLikelyHtml(rawBody);
+  const shouldRenderHtml = bodyViewMode === "html" || (bodyViewMode === "auto" && bodyHasHtml);
 
   async function applyCampaign() {
     await loadList(0, "first");
@@ -454,27 +464,56 @@ export default function Home() {
                 <div className="mt-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-zinc-900">Corps</div>
-                    <button
-                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50"
-                      disabled={!detail?.email_brouillon_corps}
-                      onClick={async () => {
-                        if (!detail?.email_brouillon_corps) return;
-                        await navigator.clipboard.writeText(detail.email_brouillon_corps);
-                      }}
-                    >
-                      Copier
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 outline-none"
+                        value={bodyViewMode}
+                        onChange={(e) => setBodyViewMode(e.target.value as "auto" | "html" | "text")}
+                        title="Mode d'affichage du corps"
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="html">HTML visuel</option>
+                        <option value="text">Texte brut</option>
+                      </select>
+                      <button
+                        className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50"
+                        disabled={!detail?.email_brouillon_corps}
+                        onClick={async () => {
+                          if (!detail?.email_brouillon_corps) return;
+                          await navigator.clipboard.writeText(detail.email_brouillon_corps);
+                        }}
+                      >
+                        Copier
+                      </button>
+                    </div>
                   </div>
 
-                  <div
-                    className={[
-                      "mt-2 text-sm text-zinc-800 whitespace-pre-wrap break-words rounded-lg border border-zinc-100 p-3 bg-zinc-50",
-                      detailLoading ? "opacity-70" : "opacity-100",
-                    ].join(" ")}
-                    aria-busy={detailLoading}
-                  >
-                    {detail?.email_brouillon_corps || (selectedId ? "—" : "Sélectionnez un email")}
-                  </div>
+                  {shouldRenderHtml ? (
+                    <div
+                      className={[
+                        "mt-2 rounded-lg border border-zinc-100 bg-white overflow-hidden",
+                        detailLoading ? "opacity-70" : "opacity-100",
+                      ].join(" ")}
+                      aria-busy={detailLoading}
+                    >
+                      <iframe
+                        title="Aperçu HTML email"
+                        sandbox=""
+                        srcDoc={rawBody}
+                        className="h-[480px] w-full bg-white"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={[
+                        "mt-2 text-sm text-zinc-800 whitespace-pre-wrap break-words rounded-lg border border-zinc-100 p-3 bg-zinc-50",
+                        detailLoading ? "opacity-70" : "opacity-100",
+                      ].join(" ")}
+                      aria-busy={detailLoading}
+                    >
+                      {detail?.email_brouillon_corps || (selectedId ? "—" : "Sélectionnez un email")}
+                    </div>
+                  )}
                 </div>
               </div>
 
