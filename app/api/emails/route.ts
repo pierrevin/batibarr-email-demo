@@ -19,6 +19,7 @@ type EmailRow = {
   id_tiers: string | number | null;
   date_generation: string | null;
   email_brouillon_sujet: string | null;
+  descriptif: string | null;
 };
 
 type CompanyRow = {
@@ -53,11 +54,12 @@ export async function GET(req: Request) {
     let q = supabase
       .schema("preprod")
       .from("batibarr_client_ia")
-      .select("id, id_tiers, date_generation, email_brouillon_sujet")
+      .select("id, id_tiers, date_generation, email_brouillon_sujet, descriptif")
       .order("date_generation", { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (campagneId) q = q.eq("campagne_id", campagneId);
+    q = q.not("descriptif", "is", null).neq("descriptif", "");
 
     const { data: emailRows, error: emailErr } = await q;
     if (emailErr) throw emailErr;
