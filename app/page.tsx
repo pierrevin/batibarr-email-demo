@@ -28,6 +28,11 @@ type EmailDetail = {
   email_brouillon_sujet: string | null;
   email_brouillon_corps: string | null;
   email_brouillon_points_cles: string[];
+  descriptif: string | null;
+  marches: string | null;
+  concurrents: string | null;
+  actualites: string | null;
+  salons: string | null;
   company: Company;
 };
 
@@ -518,6 +523,26 @@ export default function Home() {
               </div>
 
               <aside className="space-y-4">
+                <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-zinc-900">Contexte société (IA)</div>
+                  <div className="mt-3 grid grid-cols-1 gap-2">
+                    {[
+                      { label: "Descriptif", value: detail?.descriptif },
+                      { label: "Marchés", value: detail?.marches },
+                      { label: "Concurrents", value: detail?.concurrents },
+                      { label: "Actualités", value: detail?.actualites },
+                      { label: "Salons", value: detail?.salons },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">{item.label}</div>
+                        <div className="mt-1 text-sm text-zinc-800 whitespace-pre-wrap break-words">
+                          {item.value && item.value.trim().length > 0 ? item.value : "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-zinc-200 bg-white p-4">
                   <div className="text-sm font-semibold text-zinc-900">Points clés / argumentaire</div>
                   <div className="mt-3 flex flex-col gap-2">
