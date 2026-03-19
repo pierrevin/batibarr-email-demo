@@ -49,7 +49,7 @@ export async function GET(
 
     const { data: emailRow, error: emailErr } = await supabase
       .schema("preprod")
-      .from("batibarr_clients_ia")
+      .from("batibarr_client_ia")
       .select("id_tiers, date_generation, email_brouillon_sujet, email_brouillon_corps, email_brouillon_points_cles")
       .eq("id", id)
       .maybeSingle();
@@ -64,6 +64,7 @@ export async function GET(
     let company: Company = null;
     if (idTiers) {
       const { data: companyRow, error: companyErr } = await supabase
+        .schema("preprod")
         .from("batibarr_clients")
         .select("id, name, entity, address, town, state, country_code, email, phone")
         .eq("id", idTiers)

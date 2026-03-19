@@ -52,7 +52,7 @@ export async function GET(req: Request) {
 
     let q = supabase
       .schema("preprod")
-      .from("batibarr_clients_ia")
+      .from("batibarr_client_ia")
       .select("id, id_tiers, date_generation, email_brouillon_sujet")
       .order("date_generation", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -74,6 +74,7 @@ export async function GET(req: Request) {
     let companies: CompanyRow[] = [];
     if (tierIds.length > 0) {
       const { data, error: companyErr } = await supabase
+        .schema("preprod")
         .from("batibarr_clients")
         .select("id, name, entity, address, town, state, country_code, email, phone")
         .in("id", tierIds);
