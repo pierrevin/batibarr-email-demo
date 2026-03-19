@@ -524,6 +524,23 @@ export default function Home() {
 
               <aside className="space-y-4">
                 <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-zinc-900">Société ciblée</div>
+                  <div className="mt-2 text-sm text-zinc-700">
+                    <div className="font-medium text-zinc-900">{detail?.company?.name ?? "—"}</div>
+                    <div className="mt-1">{detail?.company?.entity ?? ""}</div>
+                    <div className="mt-3 text-sm text-zinc-600 whitespace-pre-wrap">
+                      {[detail?.company?.address, detail?.company?.town, detail?.company?.state, detail?.company?.country_code]
+                        .filter((x) => (x ?? "").trim().length > 0)
+                        .join(", ") || ""}
+                    </div>
+                    <div className="mt-3 text-sm text-zinc-600">
+                      {detail?.company?.email ? `Email: ${detail.company.email}` : ""}
+                      {detail?.company?.phone ? ` · Téléphone: ${detail.company.phone}` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 bg-white p-4">
                   <div className="text-sm font-semibold text-zinc-900">Contexte société (IA)</div>
                   <div className="mt-3 grid grid-cols-1 gap-2">
                     {[
@@ -555,23 +572,6 @@ export default function Home() {
                     ) : (
                       <div className="text-sm text-zinc-600">—</div>
                     )}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-zinc-900">Société ciblée</div>
-                  <div className="mt-2 text-sm text-zinc-700">
-                    <div className="font-medium text-zinc-900">{detail?.company?.name ?? "—"}</div>
-                    <div className="mt-1">{detail?.company?.entity ?? ""}</div>
-                    <div className="mt-3 text-sm text-zinc-600 whitespace-pre-wrap">
-                      {[detail?.company?.address, detail?.company?.town, detail?.company?.state, detail?.company?.country_code]
-                        .filter((x) => (x ?? "").trim().length > 0)
-                        .join(", ") || ""}
-                    </div>
-                    <div className="mt-3 text-sm text-zinc-600">
-                      {detail?.company?.email ? `Email: ${detail.company.email}` : ""}
-                      {detail?.company?.phone ? ` · Téléphone: ${detail.company.phone}` : ""}
-                    </div>
                   </div>
                 </div>
               </aside>
