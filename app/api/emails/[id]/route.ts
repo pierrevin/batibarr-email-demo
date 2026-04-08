@@ -17,7 +17,7 @@ type Company = {
 type EmailRow = {
   id: string | number;
   id_tiers: string | number | null;
-  date_generation: string | null;
+  sent_to_batibarr_date: string | null;
   email_brouillon_sujet: string | null;
   email_brouillon_corps: string | null;
   email_brouillon_points_cles: unknown;
@@ -55,7 +55,7 @@ export async function GET(
     const { data: emailRow, error: emailErr } = await supabase
       .schema("preprod")
       .from("batibarr_client_ia")
-      .select("id_tiers, date_generation, email_brouillon_sujet, email_brouillon_corps, email_brouillon_points_cles, descriptif, marches, concurrents, actualites, salons")
+      .select("id_tiers, sent_to_batibarr_date, email_brouillon_sujet, email_brouillon_corps, email_brouillon_points_cles, descriptif, marches, concurrents, actualites, salons")
       .eq("id", id)
       .maybeSingle();
 
@@ -97,7 +97,7 @@ export async function GET(
 
     return NextResponse.json({
       id: String(emailRowTyped.id ?? id),
-      date_generation: emailRowTyped.date_generation ?? null,
+      date_generation: emailRowTyped.sent_to_batibarr_date ?? null,
       email_brouillon_sujet: emailRowTyped.email_brouillon_sujet ?? null,
       email_brouillon_corps: emailRowTyped.email_brouillon_corps ?? null,
       email_brouillon_points_cles: points,

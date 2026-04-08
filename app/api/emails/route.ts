@@ -17,7 +17,7 @@ type Company = {
 type EmailRow = {
   id: string | number;
   id_tiers: string | number | null;
-  date_generation: string | null;
+  sent_to_batibarr_date: string | null;
   email_brouillon_sujet: string | null;
   descriptif: string | null;
 };
@@ -50,8 +50,8 @@ export async function GET(req: Request) {
     let q = supabase
       .schema("preprod")
       .from("batibarr_client_ia")
-      .select("id, id_tiers, date_generation, email_brouillon_sujet, descriptif")
-      .order("date_generation", { ascending: false });
+      .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
+      .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
 
     if (campagneId) q = q.eq("campagne_id", campagneId);
     q = q.not("descriptif", "is", null).neq("descriptif", "");
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
       const company = r.id_tiers ? companyById.get(String(r.id_tiers)) ?? null : null;
       return {
         id: String(r.id),
-        date_generation: r.date_generation ?? null,
+        date_generation: r.sent_to_batibarr_date ?? null,
         id_tiers: r.id_tiers ? String(r.id_tiers) : null,
         email_brouillon_sujet: r.email_brouillon_sujet ?? null,
         company,
