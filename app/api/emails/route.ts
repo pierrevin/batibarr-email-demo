@@ -106,6 +106,12 @@ export async function GET(req: Request) {
 
   const campagneId =
     campagneIdRaw && campagneIdRaw.trim().length > 0 ? campagneIdRaw.trim() : null;
+  const campaignIds = campagneId
+    ? campagneId
+        .split(",")
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0)
+    : [];
   const sourceRaw = url.searchParams.get("source");
   const schema = sourceRaw === "preprod" ? "preprod" : "data";
 
@@ -118,7 +124,11 @@ export async function GET(req: Request) {
         .from("batibarr_client_ia")
         .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
         .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
-      if (withCampaignFilter && campagneId) query = query.eq("campagne_id", campagneId);
+      if (withCampaignFilter && campaignIds.length === 1) {
+        query = query.eq("campagne_id", campaignIds[0]);
+      } else if (withCampaignFilter && campaignIds.length > 1) {
+        query = query.in("campagne_id", campaignIds);
+      }
       if (withDescriptifFilter) query = query.not("descriptif", "is", null).neq("descriptif", "");
       return query;
     };
@@ -142,7 +152,11 @@ export async function GET(req: Request) {
         .from("batibarr_client_ia")
         .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet")
         .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
-      if (campagneId) fallbackQ = fallbackQ.eq("campagne_id", campagneId);
+      if (campaignIds.length === 1) {
+        fallbackQ = fallbackQ.eq("campagne_id", campaignIds[0]);
+      } else if (campaignIds.length > 1) {
+        fallbackQ = fallbackQ.in("campagne_id", campaignIds);
+      }
       const fallback = await fallbackQ;
       emailRows = fallback.data as unknown[] | null;
       emailErr = fallback.error;
