@@ -4,8 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmailDetail } from "@/app/components/EmailDetail";
 import { EmailList } from "@/app/components/EmailList";
 import { ExportButton } from "@/app/components/ExportButton";
+import { StatsPanel } from "@/app/components/StatsPanel";
 import { useReadEmails } from "@/app/hooks/useReadEmails";
-import type { EmailDetail as EmailDetailType, EmailListItem } from "@/app/types/email";
+import type {
+  CampaignOption,
+  EmailDetail as EmailDetailType,
+  EmailListItem,
+  EmailStats,
+} from "@/app/types/email";
 import { fetchJson } from "@/lib/fetchJson";
 
 export default function Home() {
@@ -16,6 +22,9 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [campaignId, setCampaignId] = useState<string>("");
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [campaignsError, setCampaignsError] = useState<string | null>(null);
   const [source, setSource] = useState<"prod" | "preprod">("prod");
   const [limit] = useState(50);
   const [offset, setOffset] = useState(0);
@@ -24,6 +33,7 @@ export default function Home() {
   const [items, setItems] = useState<EmailListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<EmailDetailType | null>(null);
+  const [stats, setStats] = useState<EmailStats | null>(null);
 
   const [listLoading, setListLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -49,7 +59,11 @@ export default function Home() {
   }, []);
 
   const loadList = useCallback(
-    async (newOffset: number, strategy: "first" | "last" | "keep") => {
+    async (
+      newOffset: number,
+      strategy: "first" | "last" | "keep",
+      preservedSelectedId: string | null = null,
+    ) => {
       if (!isAuthenticated) return;
       setListError(null);
       setListLoading(true);
@@ -62,12 +76,13 @@ export default function Home() {
       if (campaignId.trim()) params.set("campagne_id", campaignId.trim());
 
       try {
-        const data = await fetchJson<{ items: EmailListItem[]; hasMore: boolean }>(
+        const data = await fetchJson<{ items: EmailListItem[]; hasMore: boolean; stats: EmailStats }>(
           `/api/emails?${params.toString()}`,
         );
 
         setItems(data.items);
         setHasMore(data.hasMore);
+        setStats(data.stats ?? { totalCompanies: 0, byRepresentative: [] });
         setOffset(newOffset);
 
         if (data.items.length === 0) {
@@ -77,7 +92,9 @@ export default function Home() {
         }
 
         const keepSelected =
-          strategy === "keep" && selectedId && data.items.some((x) => x.id === selectedId);
+          strategy === "keep" &&
+          preservedSelectedId &&
+          data.items.some((x) => x.id === preservedSelectedId);
 
         if (keepSelected) {
           // selectedId déjà valide
@@ -89,6 +106,7 @@ export default function Home() {
       } catch (e) {
         setListError(e instanceof Error ? e.message : String(e));
         setItems([]);
+        setStats({ totalCompanies: 0, byRepresentative: [] });
         setSelectedId(null);
         setDetail(null);
         setHasMore(false);
@@ -96,13 +114,33 @@ export default function Home() {
         setListLoading(false);
       }
     },
-    [isAuthenticated, campaignId, source, limit, selectedId],
+    [isAuthenticated, campaignId, source, limit],
   );
 
   useEffect(() => {
+    const run = async () => {
+      if (!isAuthenticated) return;
+      setCampaignsLoading(true);
+      setCampaignsError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set("source", source);
+        const data = await fetchJson<{ items: CampaignOption[] }>(`/api/campaigns?${params.toString()}`);
+        setCampaigns(data.items ?? []);
+      } catch (e) {
+        setCampaigns([]);
+        setCampaignsError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setCampaignsLoading(false);
+      }
+    };
+    run();
+  }, [isAuthenticated, source]);
+
+  useEffect(() => {
     if (!isAuthenticated) return;
-    if (items.length === 0) loadList(0, "first");
-  }, [isAuthenticated, items.length, loadList]);
+    void loadList(0, "first");
+  }, [isAuthenticated, source, campaignId, loadList]);
 
   useEffect(() => {
     if (!isAuthenticated || !selectedId) return;
@@ -154,7 +192,7 @@ export default function Home() {
     }
     if (offset <= 0) return;
     const newOffset = Math.max(0, offset - limit);
-    await loadList(newOffset, "last");
+    await loadList(newOffset, "last", selectedId);
   }, [listLoading, items, selectedId, offset, limit, loadList]);
 
   const goNext = useCallback(async () => {
@@ -165,7 +203,7 @@ export default function Home() {
       return;
     }
     if (!hasMore) return;
-    await loadList(offset + limit, "first");
+    await loadList(offset + limit, "first", selectedId);
   }, [listLoading, items, selectedId, hasMore, offset, limit, loadList]);
 
   useEffect(() => {
@@ -220,17 +258,16 @@ export default function Home() {
     setIsAuthenticated(false);
     setPasswordInput("");
     setItems([]);
+    setStats(null);
     setSelectedId(null);
     setDetail(null);
   }
 
-  async function applyCampaign() {
-    await loadList(0, "first");
-  }
-
   function applySource(newSource: "prod" | "preprod") {
     setSource(newSource);
+    setCampaignId("");
     setItems([]);
+    setStats(null);
     setSelectedId(null);
     setDetail(null);
     setOffset(0);
@@ -304,11 +341,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 flex flex-col">
-      <header className="sticky top-0 z-10 shrink-0 bg-zinc-50 border-b border-zinc-200">
-        <div className="flex items-center justify-between gap-4 px-4 py-3 flex-wrap">
+      <header className="sticky top-0 z-10 shrink-0 bg-white border-b border-zinc-200">
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="min-w-0">
             <div className="text-sm text-zinc-600">Batibarr</div>
-            <div className="text-lg font-semibold leading-tight">Emails IA (démo)</div>
+            <div className="text-lg font-semibold leading-tight">Boite de reception IA</div>
             {!listLoading && items.length > 0 ? (
               <div className="mt-1 text-xs text-zinc-500">
                 {items.length} email{items.length !== 1 ? "s" : ""} · {readCountInList} lu
@@ -316,15 +353,20 @@ export default function Home() {
               </div>
             ) : null}
           </div>
+        </div>
+      </header>
 
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-700" htmlFor="source">
+      <main className="grid flex-1 min-h-0 grid-cols-[260px_420px_minmax(0,1fr)_320px]">
+        <aside className="border-r border-zinc-200 bg-white p-4 overflow-auto">
+          <div className="text-sm font-semibold text-zinc-900">Navigation</div>
+          <div className="mt-3 space-y-3">
+            <div>
+              <label className="text-xs uppercase tracking-wide text-zinc-600" htmlFor="source">
                 Base
               </label>
               <select
                 id="source"
-                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-zinc-400"
                 value={source}
                 onChange={(e) => void applySource(e.target.value as "prod" | "preprod")}
                 disabled={listLoading}
@@ -333,45 +375,46 @@ export default function Home() {
                 <option value="preprod">Preprod</option>
               </select>
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-700" htmlFor="campagneId">
-                Campagne ID
+
+            <div>
+              <label className="text-xs uppercase tracking-wide text-zinc-600" htmlFor="campagneId">
+                Campagne
               </label>
-              <input
+              <select
                 id="campagneId"
-                className="w-36 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-zinc-400"
                 value={campaignId}
                 onChange={(e) => setCampaignId(e.target.value)}
-                placeholder="ex: 123"
-                inputMode="numeric"
-              />
+                disabled={listLoading || campaignsLoading}
+              >
+                <option value="">Toutes les campagnes</option>
+                {campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.label}
+                  </option>
+                ))}
+              </select>
+              {campaignsError ? <div className="mt-1 text-xs text-red-600">{campaignsError}</div> : null}
             </div>
-            <button
-              type="button"
-              onClick={applyCampaign}
-              disabled={listLoading}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
-            >
-              Charger
-            </button>
-            <ExportButton
-              items={items}
-              readIds={readIds}
-              campaignId={campaignId}
-              disabled={listLoading}
-            />
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-            >
-              Se déconnecter
-            </button>
-          </div>
-        </div>
-      </header>
 
-      <main className="flex flex-1 min-h-0">
+            <div className="pt-2 space-y-2">
+              <ExportButton
+                items={items}
+                readIds={readIds}
+                campaignId={campaignId}
+                disabled={listLoading}
+              />
+              <button
+                type="button"
+                onClick={logout}
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+              >
+                Se deconnecter
+              </button>
+            </div>
+          </div>
+        </aside>
+
         <EmailList
           items={items}
           selectedId={selectedId}
@@ -397,6 +440,8 @@ export default function Home() {
           nextDisabled={items.length === 0 || (atLast && !hasMore)}
           listLoading={listLoading}
         />
+
+        <StatsPanel stats={stats} loading={listLoading} />
       </main>
     </div>
   );

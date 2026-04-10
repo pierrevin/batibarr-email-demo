@@ -12,7 +12,19 @@ type Company = {
   country_code: string | null;
   email: string | null;
   phone: string | null;
+  representative: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
 } | null;
+
+type RepresentativeStat = {
+  representativeId: string | null;
+  representativeName: string;
+  companyCount: number;
+};
 
 type EmailRow = {
   id: string | number;
@@ -32,7 +44,20 @@ type CompanyRow = {
   country_code: string | null;
   email: string | null;
   phone: string | null;
+  id_commercial: string | number | null;
 };
+
+type RepresentativeRow = {
+  id: string | number;
+} & Record<string, unknown>;
+
+function pickString(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  }
+  return null;
+}
 
 export async function GET(req: Request) {
   const denied = requireDemoSession(req);
@@ -75,10 +100,45 @@ export async function GET(req: Request) {
       const { data, error: companyErr } = await supabase
         .schema(schema)
         .from("batibarr_clients")
-        .select("id, name, entity, address, town, state, country_code, email, phone")
+        .select("id, name, entity, address, town, state, country_code, email, phone, id_commercial")
         .in("id", tierIds);
       if (companyErr) throw companyErr;
       companies = (data ?? []) as unknown as CompanyRow[];
+    }
+
+    const representativeIds = Array.from(
+      new Set(
+        companies
+          .map((c) => c.id_commercial)
+          .filter((v): v is string | number => v !== null && v !== undefined),
+      ),
+    );
+
+    let representatives: RepresentativeRow[] = [];
+    if (representativeIds.length > 0) {
+      const { data, error: representativeErr } = await supabase
+        .schema(schema)
+        .from("batibarr_representatives")
+        .select("*")
+        .in("id", representativeIds);
+      if (representativeErr) throw representativeErr;
+      representatives = (data ?? []) as unknown as RepresentativeRow[];
+    }
+
+    const representativeById = new Map<string, Company["representative"]>();
+    for (const raw of representatives) {
+      const row = raw as Record<string, unknown>;
+      const id = String(raw.id);
+      const firstName = pickString(row, ["first_name", "firstname", "prenom", "firstName"]);
+      const lastName = pickString(row, ["last_name", "lastname", "nom", "lastName"]);
+      const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+      const fallbackName = pickString(row, ["name", "full_name", "display_name", "label"]);
+      representativeById.set(id, {
+        id,
+        name: fullName || fallbackName || null,
+        email: pickString(row, ["email", "mail"]),
+        phone: pickString(row, ["phone", "telephone", "mobile", "tel"]),
+      });
     }
 
     const companyById = new Map<string, Company>();
@@ -93,6 +153,9 @@ export async function GET(req: Request) {
         country_code: c.country_code ?? null,
         email: c.email ?? null,
         phone: c.phone ?? null,
+        representative: c.id_commercial
+          ? representativeById.get(String(c.id_commercial)) ?? null
+          : null,
       });
     }
 
@@ -107,7 +170,41 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ items, hasMore: false });
+    const distinctCompanyIds = new Set<string>();
+    const companyIdsByRepresentative = new Map<string, Set<string>>();
+    for (const r of emailRowsTyped) {
+      if (!r.id_tiers) continue;
+      const companyId = String(r.id_tiers);
+      distinctCompanyIds.add(companyId);
+      const representativeId = companyById.get(companyId)?.representative?.id ?? "__unassigned__";
+      const bucket = companyIdsByRepresentative.get(representativeId) ?? new Set<string>();
+      bucket.add(companyId);
+      companyIdsByRepresentative.set(representativeId, bucket);
+    }
+
+    const byRepresentative: RepresentativeStat[] = Array.from(companyIdsByRepresentative.entries())
+      .map(([representativeIdRaw, companyIds]) => {
+        const isUnassigned = representativeIdRaw === "__unassigned__";
+        const representativeId = isUnassigned ? null : representativeIdRaw;
+        const representativeName = isUnassigned
+          ? "Non assigne"
+          : (representativeById.get(representativeIdRaw)?.name ?? `Commercial #${representativeIdRaw}`);
+        return {
+          representativeId,
+          representativeName,
+          companyCount: companyIds.size,
+        };
+      })
+      .sort((a, b) => b.companyCount - a.companyCount || a.representativeName.localeCompare(b.representativeName));
+
+    return NextResponse.json({
+      items,
+      hasMore: false,
+      stats: {
+        totalCompanies: distinctCompanyIds.size,
+        byRepresentative,
+      },
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

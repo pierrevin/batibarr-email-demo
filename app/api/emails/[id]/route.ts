@@ -12,6 +12,12 @@ type Company = {
   country_code: string | null;
   email: string | null;
   phone: string | null;
+  representative: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
 } | null;
 
 type EmailRow = {
@@ -38,7 +44,20 @@ type CompanyRow = {
   country_code: string | null;
   email: string | null;
   phone: string | null;
+  id_commercial: string | number | null;
 };
+
+type RepresentativeRow = {
+  id: string | number;
+} & Record<string, unknown>;
+
+function pickString(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  }
+  return null;
+}
 
 export async function GET(
   req: Request,
@@ -74,13 +93,37 @@ export async function GET(
       const { data: companyRow, error: companyErr } = await supabase
         .schema(schema)
         .from("batibarr_clients")
-        .select("id, name, entity, address, town, state, country_code, email, phone")
+        .select("id, name, entity, address, town, state, country_code, email, phone, id_commercial")
         .eq("id", idTiers)
         .maybeSingle();
 
       if (companyErr) throw companyErr;
       if (companyRow) {
         const companyRowTyped = companyRow as unknown as CompanyRow;
+        let representative: Company["representative"] = null;
+        if (companyRowTyped.id_commercial) {
+          const { data: representativeRow, error: representativeErr } = await supabase
+            .schema(schema)
+            .from("batibarr_representatives")
+            .select("*")
+            .eq("id", companyRowTyped.id_commercial)
+            .maybeSingle();
+          if (representativeErr) throw representativeErr;
+          if (representativeRow) {
+            const row = representativeRow as unknown as RepresentativeRow;
+            const raw = representativeRow as Record<string, unknown>;
+            const firstName = pickString(raw, ["first_name", "firstname", "prenom", "firstName"]);
+            const lastName = pickString(raw, ["last_name", "lastname", "nom", "lastName"]);
+            const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+            const fallbackName = pickString(raw, ["name", "full_name", "display_name", "label"]);
+            representative = {
+              id: String(row.id),
+              name: fullName || fallbackName || null,
+              email: pickString(raw, ["email", "mail"]),
+              phone: pickString(raw, ["phone", "telephone", "mobile", "tel"]),
+            };
+          }
+        }
         company = {
           id: String(companyRowTyped.id),
           name: companyRowTyped.name ?? null,
@@ -91,6 +134,7 @@ export async function GET(
           country_code: companyRowTyped.country_code ?? null,
           email: companyRowTyped.email ?? null,
           phone: companyRowTyped.phone ?? null,
+          representative,
         };
       }
     }

@@ -158,6 +158,16 @@ export function EmailDetail({
                   {detail?.company?.email ? `Email: ${detail.company.email}` : ""}
                   {detail?.company?.phone ? ` · Téléphone: ${detail.company.phone}` : ""}
                 </div>
+                <div className="mt-3 text-sm text-zinc-600">
+                  <span className="font-medium text-zinc-700">Commercial:</span>{" "}
+                  {detail?.company?.representative?.name ?? "—"}
+                  {detail?.company?.representative?.email
+                    ? ` · ${detail.company.representative.email}`
+                    : ""}
+                  {detail?.company?.representative?.phone
+                    ? ` · ${detail.company.representative.phone}`
+                    : ""}
+                </div>
               </div>
             </div>
 

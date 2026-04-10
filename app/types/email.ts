@@ -1,3 +1,10 @@
+export type Representative = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+} | null;
+
 export type Company = {
   id: string;
   name: string | null;
@@ -8,6 +15,7 @@ export type Company = {
   country_code: string | null;
   email: string | null;
   phone: string | null;
+  representative: Representative;
 } | null;
 
 export type EmailListItem = {
@@ -30,4 +38,21 @@ export type EmailDetail = {
   actualites: string | null;
   salons: string | null;
   company: Company;
+};
+
+export type CampaignOption = {
+  id: string;
+  date: string | null;
+  label: string;
+};
+
+export type RepresentativeStat = {
+  representativeId: string | null;
+  representativeName: string;
+  companyCount: number;
+};
+
+export type EmailStats = {
+  totalCompanies: number;
+  byRepresentative: RepresentativeStat[];
 };
