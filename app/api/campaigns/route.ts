@@ -3,7 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireDemoSession } from "../_utils/requireDemoToken";
 
 type CampaignRow = {
-  id: string | number | null;
+  campagne_id: string | number | null;
+  sent_to_batibarr_date: string | null;
 } & Record<string, unknown>;
 
 type DbError = {
@@ -23,46 +24,26 @@ function isMissingRelationOrColumnError(error: unknown): boolean {
   );
 }
 
-function pickDateValue(row: Record<string, unknown>): string | null {
-  const keys = [
-    "date_generation",
-    "date_campaign",
-    "campaign_datetime",
-    "campaign_date_time",
-    "date_heure",
-    "datetime",
-    "created_on",
-    "date_creation",
-    "created_at",
-    "campaign_date",
-    "date",
-    "generated_at",
-    "sent_to_batibarr_date",
-    "start_date",
-  ];
-
-  for (const key of keys) {
-    const value = row[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      const ts = Date.parse(value);
-      if (!Number.isNaN(ts)) return new Date(ts).toISOString();
-    }
-    if (typeof value === "number" && Number.isFinite(value)) {
-      const ms = value > 1_000_000_000_000 ? value : value * 1000;
-      const ts = new Date(ms).getTime();
-      if (!Number.isNaN(ts)) return new Date(ts).toISOString();
-    }
-    if (value instanceof Date && !Number.isNaN(value.getTime())) {
-      return value.toISOString();
-    }
+function toIsoDate(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    const ts = Date.parse(value);
+    if (!Number.isNaN(ts)) return new Date(ts).toISOString();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const ms = value > 1_000_000_000_000 ? value : value * 1000;
+    const ts = new Date(ms).getTime();
+    if (!Number.isNaN(ts)) return new Date(ts).toISOString();
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
   }
   return null;
 }
 
 function formatCampaignLabel(id: string, dateRaw: string | null): string {
-  if (!dateRaw) return `Campagne #${id} · date inconnue`;
+  if (!dateRaw) return `#${id} · date inconnue`;
   const dt = new Date(dateRaw);
-  if (Number.isNaN(dt.getTime())) return `Campagne #${id} · date inconnue`;
+  if (Number.isNaN(dt.getTime())) return `#${id} · date inconnue`;
   const formatted = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
     month: "2-digit",
@@ -71,7 +52,7 @@ function formatCampaignLabel(id: string, dateRaw: string | null): string {
     minute: "2-digit",
     timeZone: "Europe/Paris",
   }).format(dt);
-  return `${formatted} · #${id}`;
+  return `#${id} · ${formatted}`;
 }
 
 export async function GET(req: Request) {
@@ -84,7 +65,11 @@ export async function GET(req: Request) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase.schema(schema).from("batibarr_campaigns").select("*");
+    const { data, error } = await supabase
+      .schema(schema)
+      .from("batibarr_client_ia")
+      .select("campagne_id, sent_to_batibarr_date")
+      .not("campagne_id", "is", null);
     if (error) {
       if (isMissingRelationOrColumnError(error)) {
         return NextResponse.json({ items: [] });
@@ -93,11 +78,24 @@ export async function GET(req: Request) {
     }
 
     const rows = (data ?? []) as unknown as CampaignRow[];
-    const items = rows
-      .map((row) => {
-        if (row.id === null || row.id === undefined) return null;
-        const id = String(row.id);
-        const dateRaw = pickDateValue(row);
+    const oldestDateByCampaign = new Map<string, string | null>();
+    for (const row of rows) {
+      if (row.campagne_id === null || row.campagne_id === undefined) continue;
+      const id = String(row.campagne_id).trim();
+      if (!id) continue;
+      const candidate = toIsoDate(row.sent_to_batibarr_date);
+      const current = oldestDateByCampaign.get(id) ?? null;
+      if (current === null) {
+        oldestDateByCampaign.set(id, candidate);
+        continue;
+      }
+      if (candidate !== null && Date.parse(candidate) < Date.parse(current)) {
+        oldestDateByCampaign.set(id, candidate);
+      }
+    }
+
+    const items = Array.from(oldestDateByCampaign.entries())
+      .map(([id, dateRaw]) => {
         const ts = dateRaw ? Date.parse(dateRaw) : Number.NEGATIVE_INFINITY;
         const numericId = Number.parseInt(id, 10);
         return {
@@ -108,10 +106,6 @@ export async function GET(req: Request) {
           sortId: Number.isNaN(numericId) ? Number.NEGATIVE_INFINITY : numericId,
         };
       })
-      .filter(
-        (x): x is { id: string; date: string | null; label: string; sortTs: number; sortId: number } =>
-          x !== null,
-      )
       .sort((a, b) => {
         if (a.sortTs !== b.sortTs) return b.sortTs - a.sortTs;
         return b.sortId - a.sortId;
