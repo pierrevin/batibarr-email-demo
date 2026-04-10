@@ -463,9 +463,9 @@ export default function Home() {
                       ? "border-zinc-300 bg-zinc-100 text-zinc-900"
                       : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
                   ].join(" ")}
-                  title={`${row.representativeName} (${row.companyCount})`}
+                  title={`${row.representativeName} (${row.lineCount})`}
                 >
-                  {row.representativeName} ({row.companyCount})
+                  {row.representativeName} ({row.lineCount})
                 </button>
               ))}
               </div>

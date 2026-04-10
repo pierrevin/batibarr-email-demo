@@ -23,7 +23,7 @@ type Company = {
 type RepresentativeStat = {
   representativeId: string | null;
   representativeName: string;
-  companyCount: number;
+  lineCount: number;
 };
 
 type EmailRow = {
@@ -254,8 +254,7 @@ export async function GET(req: Request) {
 
     const representativeIds = Array.from(
       new Set(
-        companies
-          .map((c) => normalizeJoinId(c.id_commercial))
+        [...companies.map((c) => normalizeJoinId(c.id_commercial)), ...emailRowsTyped.map((r) => normalizeJoinId(r.id_commercial))]
           .filter((v): v is string => v !== null),
       ),
     );
@@ -339,22 +338,19 @@ export async function GET(req: Request) {
     });
 
     const distinctCompanyIds = new Set<string>();
-    const companyIdsByRepresentative = new Map<string, Set<string>>();
+    const lineCountByRepresentative = new Map<string, number>();
     for (const r of emailRowsTyped) {
       const companyId = normalizeJoinId(r.id_tiers);
-      if (!companyId) continue;
-      distinctCompanyIds.add(companyId);
+      if (companyId) distinctCompanyIds.add(companyId);
       const representativeId =
         normalizeJoinId(r.id_commercial) ??
-        companyById.get(companyId)?.representative?.id ??
+        (companyId ? companyById.get(companyId)?.representative?.id : null) ??
         "__unassigned__";
-      const bucket = companyIdsByRepresentative.get(representativeId) ?? new Set<string>();
-      bucket.add(companyId);
-      companyIdsByRepresentative.set(representativeId, bucket);
+      lineCountByRepresentative.set(representativeId, (lineCountByRepresentative.get(representativeId) ?? 0) + 1);
     }
 
-    const byRepresentative: RepresentativeStat[] = Array.from(companyIdsByRepresentative.entries())
-      .map(([representativeIdRaw, companyIds]) => {
+    const byRepresentative: RepresentativeStat[] = Array.from(lineCountByRepresentative.entries())
+      .map(([representativeIdRaw, lineCount]) => {
         const isUnassigned = representativeIdRaw === "__unassigned__";
         const representativeId = isUnassigned ? null : representativeIdRaw;
         const representativeName = isUnassigned
@@ -363,10 +359,10 @@ export async function GET(req: Request) {
         return {
           representativeId,
           representativeName,
-          companyCount: companyIds.size,
+          lineCount,
         };
       })
-      .sort((a, b) => b.companyCount - a.companyCount || a.representativeName.localeCompare(b.representativeName));
+      .sort((a, b) => b.lineCount - a.lineCount || a.representativeName.localeCompare(b.representativeName));
 
     return NextResponse.json({
       items,

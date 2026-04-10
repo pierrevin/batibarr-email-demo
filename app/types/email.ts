@@ -50,7 +50,7 @@ export type CampaignOption = {
 export type RepresentativeStat = {
   representativeId: string | null;
   representativeName: string;
-  companyCount: number;
+  lineCount: number;
 };
 
 export type EmailStats = {

@@ -58,7 +58,7 @@ export function StatsPanel({
               ].join(" ")}
             >
               <div className="truncate text-xs text-zinc-700">{row.representativeName}</div>
-              <div className="ml-2 text-xs font-semibold text-zinc-900">{row.companyCount}</div>
+              <div className="ml-2 text-xs font-semibold text-zinc-900">{row.lineCount}</div>
             </button>
           ))}
         </div>
