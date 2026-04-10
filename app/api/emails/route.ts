@@ -54,6 +54,8 @@ type RepresentativeRow = {
 type DbError = {
   code?: string;
   message?: string;
+  details?: string;
+  hint?: string;
 };
 
 function pickString(row: Record<string, unknown>, keys: string[]): string | null {
@@ -74,6 +76,25 @@ function isMissingRelationOrColumnError(error: unknown): boolean {
     message.includes("does not exist") ||
     message.includes("could not find")
   );
+}
+
+function formatApiError(error: unknown): {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+} {
+  if (error instanceof Error) return { message: error.message };
+  if (error && typeof error === "object") {
+    const e = error as DbError & Record<string, unknown>;
+    return {
+      message: typeof e.message === "string" ? e.message : JSON.stringify(e),
+      code: typeof e.code === "string" ? e.code : undefined,
+      details: typeof e.details === "string" ? e.details : undefined,
+      hint: typeof e.hint === "string" ? e.hint : undefined,
+    };
+  }
+  return { message: String(error) };
 }
 
 export async function GET(req: Request) {
@@ -272,8 +293,10 @@ export async function GET(req: Request) {
       },
     });
   } catch (e) {
+    const formatted = formatApiError(e);
+    console.error("api/emails error", formatted);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: formatted.message, errorDetails: formatted },
       { status: 500 },
     );
   }
