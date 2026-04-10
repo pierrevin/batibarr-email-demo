@@ -436,9 +436,10 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5">
-            <div className="text-[11px] text-zinc-600">Commercial</div>
-            <div className="mt-1 flex flex-wrap items-center gap-1">
+          <div className="mt-2 flex justify-end">
+            <div className="w-fit max-w-[820px] rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5">
+              <div className="text-[11px] text-zinc-600">Commercial</div>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
               <button
                 type="button"
                 onClick={() => setSelectedRepresentativeId(null)}
@@ -467,6 +468,7 @@ export default function Home() {
                   {row.representativeName} ({row.companyCount})
                 </button>
               ))}
+              </div>
             </div>
           </div>
         </div>
