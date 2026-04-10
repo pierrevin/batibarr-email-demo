@@ -81,6 +81,17 @@ function isInvalidInputSyntaxError(error: unknown): boolean {
   return e?.code === "22P02";
 }
 
+function normalizeJoinId(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^\d+(\.0+)?$/.test(raw)) {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isNaN(n)) return String(n);
+  }
+  return raw;
+}
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string }> },
@@ -109,7 +120,7 @@ export async function GET(
     }
 
     const emailRowTyped = emailRow as unknown as EmailRow;
-    const idTiers = emailRowTyped.id_tiers;
+    const idTiers = normalizeJoinId(emailRowTyped.id_tiers);
     let company: Company = null;
     if (idTiers) {
       let companyRes = await supabase
@@ -140,7 +151,7 @@ export async function GET(
             .schema(schema)
             .from("batibarr_representatives")
             .select("*")
-            .eq("id", companyRowTyped.id_commercial)
+            .eq("id", normalizeJoinId(companyRowTyped.id_commercial))
             .maybeSingle();
           if (
             representativeErr &&

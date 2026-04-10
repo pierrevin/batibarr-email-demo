@@ -89,6 +89,18 @@ function keepNumericIds(values: Array<string | number>): string[] {
     .filter((v) => /^\d+$/.test(v));
 }
 
+function normalizeJoinId(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  // Normalize numeric-like IDs: "123", "123.0", "00123" => "123"
+  if (/^\d+(\.0+)?$/.test(raw)) {
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isNaN(n)) return String(n);
+  }
+  return raw;
+}
+
 function formatApiError(error: unknown): {
   message: string;
   code?: string;
@@ -183,8 +195,8 @@ export async function GET(req: Request) {
     const tierIds = Array.from(
       new Set(
         emailRowsTyped
-          .map((r) => r.id_tiers)
-          .filter((v): v is string | number => v !== null && v !== undefined),
+          .map((r) => normalizeJoinId(r.id_tiers))
+          .filter((v): v is string => v !== null),
       ),
     );
 
@@ -229,8 +241,8 @@ export async function GET(req: Request) {
     const representativeIds = Array.from(
       new Set(
         companies
-          .map((c) => c.id_commercial)
-          .filter((v): v is string | number => v !== null && v !== undefined),
+          .map((c) => normalizeJoinId(c.id_commercial))
+          .filter((v): v is string => v !== null),
       ),
     );
 
@@ -291,18 +303,19 @@ export async function GET(req: Request) {
         country_code: c.country_code ?? null,
         email: c.email ?? null,
         phone: c.phone ?? null,
-        representative: c.id_commercial
-          ? representativeById.get(String(c.id_commercial)) ?? null
+        representative: normalizeJoinId(c.id_commercial)
+          ? representativeById.get(normalizeJoinId(c.id_commercial) as string) ?? null
           : null,
       });
     }
 
     const items = emailRowsTyped.map((r) => {
-      const company = r.id_tiers ? companyById.get(String(r.id_tiers)) ?? null : null;
+      const normalizedTierId = normalizeJoinId(r.id_tiers);
+      const company = normalizedTierId ? companyById.get(normalizedTierId) ?? null : null;
       return {
         id: String(r.id),
         date_generation: r.sent_to_batibarr_date ?? null,
-        id_tiers: r.id_tiers ? String(r.id_tiers) : null,
+        id_tiers: normalizedTierId,
         email_brouillon_sujet: r.email_brouillon_sujet ?? null,
         company,
       };
@@ -311,8 +324,8 @@ export async function GET(req: Request) {
     const distinctCompanyIds = new Set<string>();
     const companyIdsByRepresentative = new Map<string, Set<string>>();
     for (const r of emailRowsTyped) {
-      if (!r.id_tiers) continue;
-      const companyId = String(r.id_tiers);
+      const companyId = normalizeJoinId(r.id_tiers);
+      if (!companyId) continue;
       distinctCompanyIds.add(companyId);
       const representativeId = companyById.get(companyId)?.representative?.id ?? "__unassigned__";
       const bucket = companyIdsByRepresentative.get(representativeId) ?? new Set<string>();
