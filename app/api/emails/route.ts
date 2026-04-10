@@ -83,6 +83,12 @@ function isInvalidInputSyntaxError(error: unknown): boolean {
   return e?.code === "22P02";
 }
 
+function keepNumericIds(values: Array<string | number>): string[] {
+  return values
+    .map((v) => String(v).trim())
+    .filter((v) => /^\d+$/.test(v));
+}
+
 function formatApiError(error: unknown): {
   message: string;
   code?: string;
@@ -201,9 +207,20 @@ export async function GET(req: Request) {
         companyErr = companyResFallback.error;
       }
       if (companyErr && isInvalidInputSyntaxError(companyErr)) {
-        // Some id_tiers values can be malformed for bigint joins (e.g. "2,4").
-        companyData = [];
-        companyErr = null;
+        // If one tier ID is malformed, retry with numeric IDs only to keep valid joins.
+        const numericTierIds = keepNumericIds(tierIds);
+        if (numericTierIds.length > 0) {
+          const companyResRetry = await supabase
+            .schema(schema)
+            .from("batibarr_clients")
+            .select("id, name, entity, address, town, state, country_code, email, phone, id_commercial")
+            .in("id", numericTierIds);
+          companyData = companyResRetry.data as unknown[] | null;
+          companyErr = companyResRetry.error;
+        } else {
+          companyData = [];
+          companyErr = null;
+        }
       }
       if (companyErr) throw companyErr;
       companies = (companyData ?? []) as unknown as CompanyRow[];
@@ -219,18 +236,30 @@ export async function GET(req: Request) {
 
     let representatives: RepresentativeRow[] = [];
     if (representativeIds.length > 0) {
-      const { data, error: representativeErr } = await supabase
+      let representativeRes = await supabase
         .schema(schema)
         .from("batibarr_representatives")
         .select("*")
         .in("id", representativeIds);
-      if (!representativeErr) {
-        representatives = (data ?? []) as unknown as RepresentativeRow[];
+      if (representativeRes.error && isInvalidInputSyntaxError(representativeRes.error)) {
+        const numericRepresentativeIds = keepNumericIds(representativeIds);
+        if (numericRepresentativeIds.length > 0) {
+          representativeRes = await supabase
+            .schema(schema)
+            .from("batibarr_representatives")
+            .select("*")
+            .in("id", numericRepresentativeIds);
+        } else {
+          representativeRes = { data: [], error: null, count: null, status: 200, statusText: "OK" };
+        }
+      }
+      if (!representativeRes.error) {
+        representatives = (representativeRes.data ?? []) as unknown as RepresentativeRow[];
       } else if (
-        !isMissingRelationOrColumnError(representativeErr) &&
-        !isInvalidInputSyntaxError(representativeErr)
+        !isMissingRelationOrColumnError(representativeRes.error) &&
+        !isInvalidInputSyntaxError(representativeRes.error)
       ) {
-        throw representativeErr;
+        throw representativeRes.error;
       }
     }
 
