@@ -22,6 +22,7 @@ export type EmailListItem = {
   id: string;
   date_generation: string | null;
   id_tiers: string | null;
+  representative_id: string | null;
   email_brouillon_sujet: string | null;
   company: Company;
 };

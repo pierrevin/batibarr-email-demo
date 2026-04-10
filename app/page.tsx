@@ -181,7 +181,7 @@ export default function Home() {
   const filteredItems = useMemo(() => {
     if (selectedRepresentativeId === null) return items;
     return items.filter((item) => {
-      const repId = item.company?.representative?.id ?? null;
+      const repId = item.representative_id ?? item.company?.representative?.id ?? null;
       return repId === selectedRepresentativeId;
     });
   }, [items, selectedRepresentativeId]);

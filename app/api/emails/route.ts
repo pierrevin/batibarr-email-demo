@@ -29,6 +29,7 @@ type RepresentativeStat = {
 type EmailRow = {
   id: string | number;
   id_tiers: string | number | null;
+  id_commercial: string | number | null;
   sent_to_batibarr_date: string | null;
   email_brouillon_sujet: string | null;
   descriptif: string | null;
@@ -144,24 +145,37 @@ export async function GET(req: Request) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const runEmailQuery = async (withCampaignFilter: boolean, withDescriptifFilter: boolean) => {
+    const runEmailQuery = async (
+      withCampaignFilter: boolean,
+      withDescriptifFilter: boolean,
+      withCommercialColumn: boolean,
+    ) => {
       let query = supabase
         .schema(schema)
         .from("batibarr_client_ia")
-        .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
+        .select(
+          withCommercialColumn
+            ? "id, id_tiers, id_commercial, sent_to_batibarr_date, email_brouillon_sujet, descriptif"
+            : "id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif",
+        )
         .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
       if (withCampaignFilter && campagneId) query = query.eq("campagne_id", campagneId);
       if (withDescriptifFilter) query = query.not("descriptif", "is", null).neq("descriptif", "");
       return query;
     };
 
-    const primaryRes = await runEmailQuery(true, true);
+    let withCommercialColumn = true;
+    let primaryRes = await runEmailQuery(true, true, withCommercialColumn);
+    if (primaryRes.error && isMissingRelationOrColumnError(primaryRes.error)) {
+      withCommercialColumn = false;
+      primaryRes = await runEmailQuery(true, true, withCommercialColumn);
+    }
     let emailRows = primaryRes.data as unknown[] | null;
     let emailErr = primaryRes.error;
 
     // If campaign filtering fails (type mismatch, bad value, etc.), keep UI usable.
     if (emailErr && campagneId) {
-      const retryWithoutCampaign = await runEmailQuery(false, true);
+      const retryWithoutCampaign = await runEmailQuery(false, true, withCommercialColumn);
       if (!retryWithoutCampaign.error) {
         emailRows = retryWithoutCampaign.data as unknown[] | null;
         emailErr = null;
@@ -312,10 +326,13 @@ export async function GET(req: Request) {
     const items = emailRowsTyped.map((r) => {
       const normalizedTierId = normalizeJoinId(r.id_tiers);
       const company = normalizedTierId ? companyById.get(normalizedTierId) ?? null : null;
+      const lineRepresentativeId =
+        normalizeJoinId(r.id_commercial) ?? company?.representative?.id ?? null;
       return {
         id: String(r.id),
         date_generation: r.sent_to_batibarr_date ?? null,
         id_tiers: normalizedTierId,
+        representative_id: lineRepresentativeId,
         email_brouillon_sujet: r.email_brouillon_sujet ?? null,
         company,
       };
@@ -327,7 +344,10 @@ export async function GET(req: Request) {
       const companyId = normalizeJoinId(r.id_tiers);
       if (!companyId) continue;
       distinctCompanyIds.add(companyId);
-      const representativeId = companyById.get(companyId)?.representative?.id ?? "__unassigned__";
+      const representativeId =
+        normalizeJoinId(r.id_commercial) ??
+        companyById.get(companyId)?.representative?.id ??
+        "__unassigned__";
       const bucket = companyIdsByRepresentative.get(representativeId) ?? new Set<string>();
       bucket.add(companyId);
       companyIdsByRepresentative.set(representativeId, bucket);
