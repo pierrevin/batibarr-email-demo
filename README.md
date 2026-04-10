@@ -26,6 +26,10 @@ Puis ouvrez : `http://localhost:3000`
 
 La page demandera un `email + mot de passe` de démonstration.
 
+Le switch **Base** de l'interface mappe les environnements ainsi :
+- `Prod` -> schéma Supabase `data`
+- `Preprod` -> schéma Supabase `preprod`
+
 ## Déploiement Vercel
 
 Importez le dossier `email-demo` dans Vercel et configurez les mêmes variables d’environnement :
