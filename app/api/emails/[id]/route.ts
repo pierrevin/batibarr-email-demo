@@ -51,12 +51,29 @@ type RepresentativeRow = {
   id: string | number;
 } & Record<string, unknown>;
 
+type DbError = {
+  code?: string;
+  message?: string;
+};
+
 function pickString(row: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const value = row[key];
     if (typeof value === "string" && value.trim().length > 0) return value.trim();
   }
   return null;
+}
+
+function isMissingRelationOrColumnError(error: unknown): boolean {
+  const e = error as DbError | null;
+  const code = e?.code ?? "";
+  const message = (e?.message ?? "").toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
+  );
 }
 
 export async function GET(
@@ -90,15 +107,24 @@ export async function GET(
     const idTiers = emailRowTyped.id_tiers;
     let company: Company = null;
     if (idTiers) {
-      const { data: companyRow, error: companyErr } = await supabase
+      let companyRes = await supabase
         .schema(schema)
         .from("batibarr_clients")
         .select("id, name, entity, address, town, state, country_code, email, phone, id_commercial")
         .eq("id", idTiers)
         .maybeSingle();
+      if (companyRes.error && isMissingRelationOrColumnError(companyRes.error)) {
+        companyRes = await supabase
+          .schema(schema)
+          .from("batibarr_clients")
+          .select("id, name, entity, address, town, state, country_code, email, phone")
+          .eq("id", idTiers)
+          .maybeSingle();
+      }
 
-      if (companyErr) throw companyErr;
-      if (companyRow) {
+      if (companyRes.error) throw companyRes.error;
+      if (companyRes.data) {
+        const companyRow = companyRes.data;
         const companyRowTyped = companyRow as unknown as CompanyRow;
         let representative: NonNullable<Company>["representative"] = null;
         if (companyRowTyped.id_commercial) {
@@ -108,7 +134,9 @@ export async function GET(
             .select("*")
             .eq("id", companyRowTyped.id_commercial)
             .maybeSingle();
-          if (representativeErr) throw representativeErr;
+          if (representativeErr && !isMissingRelationOrColumnError(representativeErr)) {
+            throw representativeErr;
+          }
           if (representativeRow) {
             const row = representativeRow as unknown as RepresentativeRow;
             const raw = representativeRow as Record<string, unknown>;

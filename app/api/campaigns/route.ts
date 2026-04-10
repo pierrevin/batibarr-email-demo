@@ -6,6 +6,23 @@ type CampaignRow = {
   id: string | number | null;
 } & Record<string, unknown>;
 
+type DbError = {
+  code?: string;
+  message?: string;
+};
+
+function isMissingRelationOrColumnError(error: unknown): boolean {
+  const e = error as DbError | null;
+  const code = e?.code ?? "";
+  const message = (e?.message ?? "").toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
+  );
+}
+
 function pickDateValue(row: Record<string, unknown>): string | null {
   const keys = [
     "date_generation",
@@ -51,7 +68,12 @@ export async function GET(req: Request) {
   try {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.schema(schema).from("batibarr_campaigns").select("*");
-    if (error) throw error;
+    if (error) {
+      if (isMissingRelationOrColumnError(error)) {
+        return NextResponse.json({ items: [] });
+      }
+      throw error;
+    }
 
     const rows = (data ?? []) as unknown as CampaignRow[];
     const items = rows

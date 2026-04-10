@@ -51,12 +51,29 @@ type RepresentativeRow = {
   id: string | number;
 } & Record<string, unknown>;
 
+type DbError = {
+  code?: string;
+  message?: string;
+};
+
 function pickString(row: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const value = row[key];
     if (typeof value === "string" && value.trim().length > 0) return value.trim();
   }
   return null;
+}
+
+function isMissingRelationOrColumnError(error: unknown): boolean {
+  const e = error as DbError | null;
+  const code = e?.code ?? "";
+  const message = (e?.message ?? "").toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
+  );
 }
 
 export async function GET(req: Request) {
@@ -74,16 +91,51 @@ export async function GET(req: Request) {
   try {
     const supabase = getSupabaseAdmin();
 
-    let q = supabase
-      .schema(schema)
-      .from("batibarr_client_ia")
-      .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
-      .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
+    const runEmailQuery = async (withCampaignFilter: boolean, withDescriptifFilter: boolean) => {
+      let query = supabase
+        .schema(schema)
+        .from("batibarr_client_ia")
+        .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
+        .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
+      if (withCampaignFilter && campagneId) query = query.eq("campagne_id", campagneId);
+      if (withDescriptifFilter) query = query.not("descriptif", "is", null).neq("descriptif", "");
+      return query;
+    };
 
-    if (campagneId) q = q.eq("campagne_id", campagneId);
-    q = q.not("descriptif", "is", null).neq("descriptif", "");
+    const primaryRes = await runEmailQuery(true, true);
+    let emailRows = primaryRes.data as unknown[] | null;
+    let emailErr = primaryRes.error;
 
-    const { data: emailRows, error: emailErr } = await q;
+    // If campaign filtering fails (type mismatch, bad value, etc.), keep UI usable.
+    if (emailErr && campagneId) {
+      const retryWithoutCampaign = await runEmailQuery(false, true);
+      if (!retryWithoutCampaign.error) {
+        emailRows = retryWithoutCampaign.data as unknown[] | null;
+        emailErr = null;
+      }
+    }
+    if (emailErr && isMissingRelationOrColumnError(emailErr)) {
+      // Fallback for prod schemas where descriptif/campagne_id may be absent.
+      let fallbackQ = supabase
+        .schema(schema)
+        .from("batibarr_client_ia")
+        .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet")
+        .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
+      if (campagneId) fallbackQ = fallbackQ.eq("campagne_id", campagneId);
+      const fallback = await fallbackQ;
+      emailRows = fallback.data as unknown[] | null;
+      emailErr = fallback.error;
+      if (emailErr && isMissingRelationOrColumnError(emailErr)) {
+        // Last resort when campagne_id itself is absent.
+        const lastFallback = await supabase
+          .schema(schema)
+          .from("batibarr_client_ia")
+          .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet")
+          .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
+        emailRows = lastFallback.data as unknown[] | null;
+        emailErr = lastFallback.error;
+      }
+    }
     if (emailErr) throw emailErr;
 
     const emailRowsTyped = (emailRows ?? []) as unknown as EmailRow[];
@@ -97,13 +149,24 @@ export async function GET(req: Request) {
 
     let companies: CompanyRow[] = [];
     if (tierIds.length > 0) {
-      const { data, error: companyErr } = await supabase
+      const companyResPrimary = await supabase
         .schema(schema)
         .from("batibarr_clients")
         .select("id, name, entity, address, town, state, country_code, email, phone, id_commercial")
         .in("id", tierIds);
+      let companyData = companyResPrimary.data as unknown[] | null;
+      let companyErr = companyResPrimary.error;
+      if (companyErr && isMissingRelationOrColumnError(companyErr)) {
+        const companyResFallback = await supabase
+          .schema(schema)
+          .from("batibarr_clients")
+          .select("id, name, entity, address, town, state, country_code, email, phone")
+          .in("id", tierIds);
+        companyData = companyResFallback.data as unknown[] | null;
+        companyErr = companyResFallback.error;
+      }
       if (companyErr) throw companyErr;
-      companies = (data ?? []) as unknown as CompanyRow[];
+      companies = (companyData ?? []) as unknown as CompanyRow[];
     }
 
     const representativeIds = Array.from(
@@ -121,8 +184,11 @@ export async function GET(req: Request) {
         .from("batibarr_representatives")
         .select("*")
         .in("id", representativeIds);
-      if (representativeErr) throw representativeErr;
-      representatives = (data ?? []) as unknown as RepresentativeRow[];
+      if (!representativeErr) {
+        representatives = (data ?? []) as unknown as RepresentativeRow[];
+      } else if (!isMissingRelationOrColumnError(representativeErr)) {
+        throw representativeErr;
+      }
     }
 
     const representativeById = new Map<string, NonNullable<Company>["representative"]>();
