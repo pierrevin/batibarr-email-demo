@@ -78,23 +78,23 @@ export async function GET(req: Request) {
     }
 
     const rows = (data ?? []) as unknown as CampaignRow[];
-    const oldestDateByCampaign = new Map<string, string | null>();
+    const latestDateByCampaign = new Map<string, string | null>();
     for (const row of rows) {
       if (row.campagne_id === null || row.campagne_id === undefined) continue;
       const id = String(row.campagne_id).trim();
       if (!id) continue;
       const candidate = toIsoDate(row.sent_to_batibarr_date);
-      const current = oldestDateByCampaign.get(id) ?? null;
+      const current = latestDateByCampaign.get(id) ?? null;
       if (current === null) {
-        oldestDateByCampaign.set(id, candidate);
+        latestDateByCampaign.set(id, candidate);
         continue;
       }
-      if (candidate !== null && Date.parse(candidate) < Date.parse(current)) {
-        oldestDateByCampaign.set(id, candidate);
+      if (candidate !== null && Date.parse(candidate) > Date.parse(current)) {
+        latestDateByCampaign.set(id, candidate);
       }
     }
 
-    const items = Array.from(oldestDateByCampaign.entries())
+    const items = Array.from(latestDateByCampaign.entries())
       .map(([id, dateRaw]) => {
         const ts = dateRaw ? Date.parse(dateRaw) : Number.NEGATIVE_INFINITY;
         const numericId = Number.parseInt(id, 10);
