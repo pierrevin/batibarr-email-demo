@@ -76,6 +76,11 @@ function isMissingRelationOrColumnError(error: unknown): boolean {
   );
 }
 
+function isInvalidInputSyntaxError(error: unknown): boolean {
+  const e = error as DbError | null;
+  return e?.code === "22P02";
+}
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string }> },
@@ -122,6 +127,9 @@ export async function GET(
           .maybeSingle();
       }
 
+      if (companyRes.error && isInvalidInputSyntaxError(companyRes.error)) {
+        companyRes = { data: null, error: null, count: null, status: 200, statusText: "OK" };
+      }
       if (companyRes.error) throw companyRes.error;
       if (companyRes.data) {
         const companyRow = companyRes.data;
@@ -134,7 +142,11 @@ export async function GET(
             .select("*")
             .eq("id", companyRowTyped.id_commercial)
             .maybeSingle();
-          if (representativeErr && !isMissingRelationOrColumnError(representativeErr)) {
+          if (
+            representativeErr &&
+            !isMissingRelationOrColumnError(representativeErr) &&
+            !isInvalidInputSyntaxError(representativeErr)
+          ) {
             throw representativeErr;
           }
           if (representativeRow) {

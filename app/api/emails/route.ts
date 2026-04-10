@@ -78,6 +78,11 @@ function isMissingRelationOrColumnError(error: unknown): boolean {
   );
 }
 
+function isInvalidInputSyntaxError(error: unknown): boolean {
+  const e = error as DbError | null;
+  return e?.code === "22P02";
+}
+
 function formatApiError(error: unknown): {
   message: string;
   code?: string;
@@ -106,12 +111,15 @@ export async function GET(req: Request) {
 
   const campagneId =
     campagneIdRaw && campagneIdRaw.trim().length > 0 ? campagneIdRaw.trim() : null;
-  const campaignIds = campagneId
-    ? campagneId
-        .split(",")
-        .map((x) => x.trim())
-        .filter((x) => x.length > 0)
-    : [];
+  if (campagneId && campagneId.includes(",")) {
+    return NextResponse.json(
+      {
+        error: "Paramètre campagne_id invalide: une seule valeur est attendue.",
+        errorDetails: { campagneIdRaw },
+      },
+      { status: 400 },
+    );
+  }
   const sourceRaw = url.searchParams.get("source");
   const schema = sourceRaw === "preprod" ? "preprod" : "data";
 
@@ -124,11 +132,7 @@ export async function GET(req: Request) {
         .from("batibarr_client_ia")
         .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
         .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
-      if (withCampaignFilter && campaignIds.length === 1) {
-        query = query.eq("campagne_id", campaignIds[0]);
-      } else if (withCampaignFilter && campaignIds.length > 1) {
-        query = query.in("campagne_id", campaignIds);
-      }
+      if (withCampaignFilter && campagneId) query = query.eq("campagne_id", campagneId);
       if (withDescriptifFilter) query = query.not("descriptif", "is", null).neq("descriptif", "");
       return query;
     };
@@ -152,11 +156,7 @@ export async function GET(req: Request) {
         .from("batibarr_client_ia")
         .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet")
         .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
-      if (campaignIds.length === 1) {
-        fallbackQ = fallbackQ.eq("campagne_id", campaignIds[0]);
-      } else if (campaignIds.length > 1) {
-        fallbackQ = fallbackQ.in("campagne_id", campaignIds);
-      }
+      if (campagneId) fallbackQ = fallbackQ.eq("campagne_id", campagneId);
       const fallback = await fallbackQ;
       emailRows = fallback.data as unknown[] | null;
       emailErr = fallback.error;
@@ -200,6 +200,11 @@ export async function GET(req: Request) {
         companyData = companyResFallback.data as unknown[] | null;
         companyErr = companyResFallback.error;
       }
+      if (companyErr && isInvalidInputSyntaxError(companyErr)) {
+        // Some id_tiers values can be malformed for bigint joins (e.g. "2,4").
+        companyData = [];
+        companyErr = null;
+      }
       if (companyErr) throw companyErr;
       companies = (companyData ?? []) as unknown as CompanyRow[];
     }
@@ -221,7 +226,10 @@ export async function GET(req: Request) {
         .in("id", representativeIds);
       if (!representativeErr) {
         representatives = (data ?? []) as unknown as RepresentativeRow[];
-      } else if (!isMissingRelationOrColumnError(representativeErr)) {
+      } else if (
+        !isMissingRelationOrColumnError(representativeErr) &&
+        !isInvalidInputSyntaxError(representativeErr)
+      ) {
         throw representativeErr;
       }
     }
@@ -310,7 +318,14 @@ export async function GET(req: Request) {
     const formatted = formatApiError(e);
     console.error("api/emails error", formatted);
     return NextResponse.json(
-      { error: formatted.message, errorDetails: formatted },
+      {
+        error: formatted.message,
+        errorDetails: {
+          ...formatted,
+          campagneIdRaw,
+          campagneId,
+        },
+      },
       { status: 500 },
     );
   }
