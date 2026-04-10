@@ -125,7 +125,7 @@ export async function GET(req: Request) {
       representatives = (data ?? []) as unknown as RepresentativeRow[];
     }
 
-    const representativeById = new Map<string, Company["representative"]>();
+    const representativeById = new Map<string, NonNullable<Company>["representative"]>();
     for (const raw of representatives) {
       const row = raw as Record<string, unknown>;
       const id = String(raw.id);

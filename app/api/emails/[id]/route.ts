@@ -100,7 +100,7 @@ export async function GET(
       if (companyErr) throw companyErr;
       if (companyRow) {
         const companyRowTyped = companyRow as unknown as CompanyRow;
-        let representative: Company["representative"] = null;
+        let representative: NonNullable<Company>["representative"] = null;
         if (companyRowTyped.id_commercial) {
           const { data: representativeRow, error: representativeErr } = await supabase
             .schema(schema)
