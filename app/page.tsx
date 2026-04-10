@@ -366,92 +366,108 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 flex flex-col">
       <header className="sticky top-0 z-10 shrink-0 bg-white border-b border-zinc-200">
-        <div className="flex items-center justify-between gap-4 px-4 py-3 flex-wrap">
-          <div className="min-w-0">
-            <div className="text-sm text-zinc-600">Batibarr</div>
-            <div className="text-lg font-semibold leading-tight">Boite de reception IA</div>
-            {!listLoading && items.length > 0 ? (
-              <div className="mt-1 text-xs text-zinc-500">
-                {filteredItems.length} email{filteredItems.length !== 1 ? "s" : ""} · {readCountInList} lu
-                {readCountInList !== 1 ? "s" : ""}
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-sm text-zinc-600">Batibarr</div>
+              <div className="text-lg font-semibold leading-tight">Boite de reception IA</div>
+              {!listLoading && items.length > 0 ? (
+                <div className="mt-1 text-xs text-zinc-500">
+                  {filteredItems.length} email{filteredItems.length !== 1 ? "s" : ""} · {readCountInList} lu
+                  {readCountInList !== 1 ? "s" : ""}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-zinc-700" htmlFor="source">
+                  Base
+                </label>
+                <select
+                  id="source"
+                  className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  value={source}
+                  onChange={(e) => void applySource(e.target.value as "prod" | "preprod")}
+                  disabled={listLoading}
+                >
+                  <option value="prod">Prod</option>
+                  <option value="preprod">Preprod</option>
+                </select>
               </div>
-            ) : null}
+
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-zinc-700" htmlFor="campagneId">
+                  Campagne
+                </label>
+                <select
+                  id="campagneId"
+                  className="w-60 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                  value={campaignId}
+                  onChange={(e) => setCampaignId(e.target.value)}
+                  disabled={listLoading || campaignsLoading}
+                >
+                  <option value="">Toutes les campagnes</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-700">
+                Societes: <span className="font-semibold text-zinc-900">{stats?.totalCompanies ?? 0}</span>
+              </div>
+
+              <ExportButton
+                items={items}
+                readIds={readIds}
+                campaignId={campaignId}
+                disabled={listLoading}
+              />
+              <button
+                type="button"
+                onClick={logout}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+              >
+                Se deconnecter
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-700" htmlFor="source">
-                Base
-              </label>
-              <select
-                id="source"
-                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
-                value={source}
-                onChange={(e) => void applySource(e.target.value as "prod" | "preprod")}
-                disabled={listLoading}
+          <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5">
+            <div className="text-[11px] text-zinc-600">Commercial</div>
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setSelectedRepresentativeId(null)}
+                className={[
+                  "rounded border px-1.5 py-0.5 text-[11px]",
+                  selectedRepresentativeId === null
+                    ? "border-zinc-300 bg-zinc-100 text-zinc-900"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
+                ].join(" ")}
               >
-                <option value="prod">Prod</option>
-                <option value="preprod">Preprod</option>
-              </select>
+                Tous
+              </button>
+              {(stats?.byRepresentative ?? []).slice(0, 6).map((row) => (
+                <button
+                  type="button"
+                  key={row.representativeId ?? "unassigned"}
+                  onClick={() => setSelectedRepresentativeId(row.representativeId)}
+                  className={[
+                    "rounded border px-1.5 py-0.5 text-[11px] max-w-[180px] truncate",
+                    selectedRepresentativeId === row.representativeId
+                      ? "border-zinc-300 bg-zinc-100 text-zinc-900"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
+                  ].join(" ")}
+                  title={`${row.representativeName} (${row.companyCount})`}
+                >
+                  {row.representativeName} ({row.companyCount})
+                </button>
+              ))}
             </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-700" htmlFor="campagneId">
-                Campagne
-              </label>
-              <select
-                id="campagneId"
-                className="w-60 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
-                value={campaignId}
-                onChange={(e) => setCampaignId(e.target.value)}
-                disabled={listLoading || campaignsLoading}
-              >
-                <option value="">Toutes les campagnes</option>
-                {campaigns.map((campaign) => (
-                  <option key={campaign.id} value={campaign.id}>
-                    {campaign.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-700" htmlFor="repFilter">
-                Commercial
-              </label>
-              <select
-                id="repFilter"
-                className="w-52 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
-                value={selectedRepresentativeId ?? ""}
-                onChange={(e) => setSelectedRepresentativeId(e.target.value || null)}
-                disabled={listLoading}
-              >
-                <option value="">Tous</option>
-                {(stats?.byRepresentative ?? []).map((row) => (
-                  <option key={row.representativeId ?? "unassigned"} value={row.representativeId ?? ""}>
-                    {row.representativeName} ({row.companyCount})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-700">
-              Societes: <span className="font-semibold text-zinc-900">{stats?.totalCompanies ?? 0}</span>
-            </div>
-
-            <ExportButton
-              items={items}
-              readIds={readIds}
-              campaignId={campaignId}
-              disabled={listLoading}
-            />
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-            >
-              Se deconnecter
-            </button>
           </div>
         </div>
         {campaignsError ? (
