@@ -16,7 +16,7 @@ export function EmailListItem({ item, isSelected, isRead, onSelect }: Props) {
       type="button"
       onClick={() => onSelect(item.id)}
       className={[
-        "w-full text-left px-4 py-3 transition-colors flex gap-2 items-start",
+        "w-full text-left px-2.5 py-2 transition-colors flex gap-1.5 items-start",
         isSelected ? "bg-zinc-100 ring-inset ring-1 ring-zinc-200" : "bg-white hover:bg-zinc-50",
         isRead ? "opacity-55" : "opacity-100",
       ].join(" ")}
@@ -30,12 +30,12 @@ export function EmailListItem({ item, isSelected, isRead, onSelect }: Props) {
       />
       <div className="min-w-0 flex-1 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-medium text-zinc-900 truncate">{companyLine(item.company)}</div>
-          <div className="mt-1 text-sm text-zinc-700 truncate">
+          <div className="text-xs font-medium text-zinc-900 truncate">{companyLine(item.company)}</div>
+          <div className="mt-0.5 text-xs text-zinc-700 truncate">
             {item.email_brouillon_sujet || "Sans sujet"}
           </div>
         </div>
-        <div className="text-xs text-zinc-500 whitespace-nowrap">{formatDate(item.date_generation)}</div>
+        <div className="text-[10px] text-zinc-500 whitespace-nowrap">{formatDate(item.date_generation)}</div>
       </div>
     </button>
   );

@@ -26,6 +26,13 @@ function isMissingRelationOrColumnError(error: unknown): boolean {
 function pickDateValue(row: Record<string, unknown>): string | null {
   const keys = [
     "date_generation",
+    "date_campaign",
+    "campaign_datetime",
+    "campaign_date_time",
+    "date_heure",
+    "datetime",
+    "created_on",
+    "date_creation",
     "created_at",
     "campaign_date",
     "date",
@@ -36,17 +43,26 @@ function pickDateValue(row: Record<string, unknown>): string | null {
 
   for (const key of keys) {
     const value = row[key];
-    if (typeof value === "string" && value.trim().length > 0 && !Number.isNaN(Date.parse(value))) {
-      return value;
+    if (typeof value === "string" && value.trim().length > 0) {
+      const ts = Date.parse(value);
+      if (!Number.isNaN(ts)) return new Date(ts).toISOString();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const ms = value > 1_000_000_000_000 ? value : value * 1000;
+      const ts = new Date(ms).getTime();
+      if (!Number.isNaN(ts)) return new Date(ts).toISOString();
+    }
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString();
     }
   }
   return null;
 }
 
 function formatCampaignLabel(id: string, dateRaw: string | null): string {
-  if (!dateRaw) return `Campagne #${id}`;
+  if (!dateRaw) return `Campagne #${id} · date inconnue`;
   const dt = new Date(dateRaw);
-  if (Number.isNaN(dt.getTime())) return `Campagne #${id}`;
+  if (Number.isNaN(dt.getTime())) return `Campagne #${id} · date inconnue`;
   const formatted = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
     month: "2-digit",
@@ -82,15 +98,23 @@ export async function GET(req: Request) {
         const id = String(row.id);
         const dateRaw = pickDateValue(row);
         const ts = dateRaw ? Date.parse(dateRaw) : Number.NEGATIVE_INFINITY;
+        const numericId = Number.parseInt(id, 10);
         return {
           id,
           date: dateRaw,
           label: formatCampaignLabel(id, dateRaw),
           sortTs: Number.isNaN(ts) ? Number.NEGATIVE_INFINITY : ts,
+          sortId: Number.isNaN(numericId) ? Number.NEGATIVE_INFINITY : numericId,
         };
       })
-      .filter((x): x is { id: string; date: string | null; label: string; sortTs: number } => x !== null)
-      .sort((a, b) => b.sortTs - a.sortTs);
+      .filter(
+        (x): x is { id: string; date: string | null; label: string; sortTs: number; sortId: number } =>
+          x !== null,
+      )
+      .sort((a, b) => {
+        if (a.sortTs !== b.sortTs) return b.sortTs - a.sortTs;
+        return b.sortId - a.sortId;
+      });
 
     return NextResponse.json({
       items: items.map(({ id, date, label }) => ({ id, date, label })),

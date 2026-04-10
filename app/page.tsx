@@ -34,6 +34,7 @@ export default function Home() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<EmailDetailType | null>(null);
   const [stats, setStats] = useState<EmailStats | null>(null);
+  const [selectedRepresentativeId, setSelectedRepresentativeId] = useState<string | null>(null);
 
   const [listLoading, setListLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -178,41 +179,56 @@ export default function Home() {
     run();
   }, [isAuthenticated, selectedId, source]);
 
+  const filteredItems = useMemo(() => {
+    if (selectedRepresentativeId === null) return items;
+    return items.filter((item) => {
+      const repId = item.company?.representative?.id ?? null;
+      return repId === selectedRepresentativeId;
+    });
+  }, [items, selectedRepresentativeId]);
+
   const selectedIndex = useMemo(() => {
     if (!selectedId) return -1;
-    return items.findIndex((x) => x.id === selectedId);
-  }, [items, selectedId]);
+    return filteredItems.findIndex((x) => x.id === selectedId);
+  }, [filteredItems, selectedId]);
 
   const atFirst = selectedIndex <= 0;
   const atLast = selectedIndex >= items.length - 1;
 
   const readCountInList = useMemo(
-    () => items.filter((i) => readIds.has(i.id)).length,
-    [items, readIds],
+    () => filteredItems.filter((i) => readIds.has(i.id)).length,
+    [filteredItems, readIds],
   );
 
   const goPrev = useCallback(async () => {
     if (listLoading) return;
-    const idx = items.findIndex((x) => x.id === selectedId);
+    const idx = filteredItems.findIndex((x) => x.id === selectedId);
     if (idx > 0) {
-      setSelectedId(items[idx - 1].id);
+      setSelectedId(filteredItems[idx - 1].id);
       return;
     }
     if (offset <= 0) return;
     const newOffset = Math.max(0, offset - limit);
     await loadList(newOffset, "last", selectedId);
-  }, [listLoading, items, selectedId, offset, limit, loadList]);
+  }, [listLoading, filteredItems, selectedId, offset, limit, loadList]);
 
   const goNext = useCallback(async () => {
     if (listLoading) return;
-    const idx = items.findIndex((x) => x.id === selectedId);
-    if (idx >= 0 && idx < items.length - 1) {
-      setSelectedId(items[idx + 1].id);
+    const idx = filteredItems.findIndex((x) => x.id === selectedId);
+    if (idx >= 0 && idx < filteredItems.length - 1) {
+      setSelectedId(filteredItems[idx + 1].id);
       return;
     }
     if (!hasMore) return;
     await loadList(offset + limit, "first", selectedId);
-  }, [listLoading, items, selectedId, hasMore, offset, limit, loadList]);
+  }, [listLoading, filteredItems, selectedId, hasMore, offset, limit, loadList]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!filteredItems.some((x) => x.id === selectedId)) {
+      setSelectedId(filteredItems.length > 0 ? filteredItems[0].id : null);
+    }
+  }, [filteredItems, selectedId]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -269,6 +285,7 @@ export default function Home() {
     setStats(null);
     setSelectedId(null);
     setDetail(null);
+    setSelectedRepresentativeId(null);
   }
 
   function applySource(newSource: "prod" | "preprod") {
@@ -356,7 +373,7 @@ export default function Home() {
             <div className="text-lg font-semibold leading-tight">Boite de reception IA</div>
             {!listLoading && items.length > 0 ? (
               <div className="mt-1 text-xs text-zinc-500">
-                {items.length} email{items.length !== 1 ? "s" : ""} · {readCountInList} lu
+                {filteredItems.length} email{filteredItems.length !== 1 ? "s" : ""} · {readCountInList} lu
                 {readCountInList !== 1 ? "s" : ""}
               </div>
             ) : null}
@@ -419,9 +436,9 @@ export default function Home() {
         ) : null}
       </header>
 
-      <main className="grid flex-1 min-h-0 grid-cols-[420px_minmax(0,1fr)_320px]">
+      <main className="grid flex-1 min-h-0 grid-cols-[220px_minmax(0,1fr)_220px]">
         <EmailList
-          items={items}
+          items={filteredItems}
           selectedId={selectedId}
           onSelect={setSelectedId}
           readIds={readIds}
@@ -442,11 +459,16 @@ export default function Home() {
           onPrev={goPrev}
           onNext={goNext}
           prevDisabled={offset <= 0 && atFirst}
-          nextDisabled={items.length === 0 || (atLast && !hasMore)}
+          nextDisabled={filteredItems.length === 0 || (atLast && !hasMore)}
           listLoading={listLoading}
         />
 
-        <StatsPanel stats={stats} loading={listLoading} />
+        <StatsPanel
+          stats={stats}
+          loading={listLoading}
+          selectedRepresentativeId={selectedRepresentativeId}
+          onSelectRepresentative={setSelectedRepresentativeId}
+        />
       </main>
     </div>
   );
