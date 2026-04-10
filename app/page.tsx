@@ -342,7 +342,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 flex flex-col">
       <header className="sticky top-0 z-10 shrink-0 bg-white border-b border-zinc-200">
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 px-4 py-3 flex-wrap">
           <div className="min-w-0">
             <div className="text-sm text-zinc-600">Batibarr</div>
             <div className="text-lg font-semibold leading-tight">Boite de reception IA</div>
@@ -353,20 +353,15 @@ export default function Home() {
               </div>
             ) : null}
           </div>
-        </div>
-      </header>
 
-      <main className="grid flex-1 min-h-0 grid-cols-[260px_420px_minmax(0,1fr)_320px]">
-        <aside className="border-r border-zinc-200 bg-white p-4 overflow-auto">
-          <div className="text-sm font-semibold text-zinc-900">Navigation</div>
-          <div className="mt-3 space-y-3">
-            <div>
-              <label className="text-xs uppercase tracking-wide text-zinc-600" htmlFor="source">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-700" htmlFor="source">
                 Base
               </label>
               <select
                 id="source"
-                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-zinc-400"
+                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
                 value={source}
                 onChange={(e) => void applySource(e.target.value as "prod" | "preprod")}
                 disabled={listLoading}
@@ -376,13 +371,13 @@ export default function Home() {
               </select>
             </div>
 
-            <div>
-              <label className="text-xs uppercase tracking-wide text-zinc-600" htmlFor="campagneId">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-700" htmlFor="campagneId">
                 Campagne
               </label>
               <select
                 id="campagneId"
-                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-zinc-400"
+                className="w-60 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
                 value={campaignId}
                 onChange={(e) => setCampaignId(e.target.value)}
                 disabled={listLoading || campaignsLoading}
@@ -394,27 +389,29 @@ export default function Home() {
                   </option>
                 ))}
               </select>
-              {campaignsError ? <div className="mt-1 text-xs text-red-600">{campaignsError}</div> : null}
             </div>
 
-            <div className="pt-2 space-y-2">
-              <ExportButton
-                items={items}
-                readIds={readIds}
-                campaignId={campaignId}
-                disabled={listLoading}
-              />
-              <button
-                type="button"
-                onClick={logout}
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
-              >
-                Se deconnecter
-              </button>
-            </div>
+            <ExportButton
+              items={items}
+              readIds={readIds}
+              campaignId={campaignId}
+              disabled={listLoading}
+            />
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100"
+            >
+              Se deconnecter
+            </button>
           </div>
-        </aside>
+        </div>
+        {campaignsError ? (
+          <div className="px-4 pb-2 text-xs text-red-600">Erreur campagnes: {campaignsError}</div>
+        ) : null}
+      </header>
 
+      <main className="grid flex-1 min-h-0 grid-cols-[420px_minmax(0,1fr)_320px]">
         <EmailList
           items={items}
           selectedId={selectedId}
