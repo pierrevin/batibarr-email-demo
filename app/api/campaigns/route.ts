@@ -41,9 +41,9 @@ function toIsoDate(value: unknown): string | null {
 }
 
 function formatCampaignLabel(id: string, dateRaw: string | null): string {
-  if (!dateRaw) return `#${id} · date inconnue`;
+  if (!dateRaw) return `date inconnue · #${id}`;
   const dt = new Date(dateRaw);
-  if (Number.isNaN(dt.getTime())) return `#${id} · date inconnue`;
+  if (Number.isNaN(dt.getTime())) return `date inconnue · #${id}`;
   const formatted = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
     month: "2-digit",
@@ -53,7 +53,7 @@ function formatCampaignLabel(id: string, dateRaw: string | null): string {
     second: "2-digit",
     timeZone: "Europe/Paris",
   }).format(dt);
-  return `#${id} · ${formatted}`;
+  return `${formatted} · #${id}`;
 }
 
 function extractDateFromCampaignId(id: string): string | null {
