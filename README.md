@@ -12,8 +12,8 @@ Mini application Next.js pour afficher les emails générés et les infos de la 
    - `DEMO_SESSION_SECRET` (optionnel mais recommandé)
 
 2. Vérifiez que :
-   - `preprod.batibarr_client_ia` contient les champs utilisés (`email_brouillon_sujet`, `email_brouillon_corps`, `email_brouillon_points_cles`, `date_generation`, `id_tiers`, `campagne_id`)
-   - `preprod.batibarr_clients` contient au moins `id`, `name`, `entity`, `address`, `town`, `state`, `country_code`, `email`, `phone`
+   - `data.batibarr_client_ia` contient les champs utilisés (`email_brouillon_sujet`, `email_brouillon_corps`, `email_brouillon_points_cles`, `date_generation`, `id_tiers`, `campagne_id`)
+   - `data.batibarr_clients` contient au moins `id`, `name`, `entity`, `address`, `town`, `state`, `country_code`, `email`, `phone`
 
 ## Lancer en local
 

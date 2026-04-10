@@ -16,6 +16,7 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [campaignId, setCampaignId] = useState<string>("");
+  const [source, setSource] = useState<"prod" | "preprod">("prod");
   const [limit] = useState(50);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -57,6 +58,7 @@ export default function Home() {
       const params = new URLSearchParams();
       params.set("limit", String(limit));
       params.set("offset", String(newOffset));
+      params.set("source", source);
       if (campaignId.trim()) params.set("campagne_id", campaignId.trim());
 
       try {
@@ -94,7 +96,7 @@ export default function Home() {
         setListLoading(false);
       }
     },
-    [isAuthenticated, campaignId, limit, selectedId],
+    [isAuthenticated, campaignId, source, limit, selectedId],
   );
 
   useEffect(() => {
@@ -114,7 +116,11 @@ export default function Home() {
 
     const run = async () => {
       try {
-        const d = await fetchJson<EmailDetailType>(`/api/emails/${encodeURIComponent(selectedId)}`);
+        const params = new URLSearchParams();
+        params.set("source", source);
+        const d = await fetchJson<EmailDetailType>(
+          `/api/emails/${encodeURIComponent(selectedId)}?${params.toString()}`,
+        );
         setDetail(d);
       } catch (e) {
         setListError(e instanceof Error ? e.message : String(e));
@@ -124,7 +130,7 @@ export default function Home() {
       }
     };
     run();
-  }, [isAuthenticated, selectedId]);
+  }, [isAuthenticated, selectedId, source]);
 
   const selectedIndex = useMemo(() => {
     if (!selectedId) return -1;
@@ -222,6 +228,15 @@ export default function Home() {
     await loadList(0, "first");
   }
 
+  function applySource(newSource: "prod" | "preprod") {
+    setSource(newSource);
+    setItems([]);
+    setSelectedId(null);
+    setDetail(null);
+    setOffset(0);
+    setHasMore(true);
+  }
+
   const handleMarkAllRead = useCallback(() => {
     markAllAsRead(items.map((i) => i.id));
   }, [items, markAllAsRead]);
@@ -303,6 +318,21 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-700" htmlFor="source">
+                Base
+              </label>
+              <select
+                id="source"
+                className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                value={source}
+                onChange={(e) => void applySource(e.target.value as "prod" | "preprod")}
+                disabled={listLoading}
+              >
+                <option value="prod">Prod</option>
+                <option value="preprod">Preprod</option>
+              </select>
+            </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-zinc-700" htmlFor="campagneId">
                 Campagne ID

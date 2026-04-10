@@ -48,12 +48,15 @@ export async function GET(
   if (denied) return denied;
 
   const { id } = await context.params;
+  const url = new URL(req.url);
+  const sourceRaw = url.searchParams.get("source");
+  const schema = sourceRaw === "preprod" ? "preprod" : "data";
 
   try {
     const supabase = getSupabaseAdmin();
 
     const { data: emailRow, error: emailErr } = await supabase
-      .schema("preprod")
+      .schema(schema)
       .from("batibarr_client_ia")
       .select("id_tiers, sent_to_batibarr_date, email_brouillon_sujet, email_brouillon_corps, email_brouillon_points_cles, descriptif, marches, concurrents, actualites, salons")
       .eq("id", id)
@@ -69,7 +72,7 @@ export async function GET(
     let company: Company = null;
     if (idTiers) {
       const { data: companyRow, error: companyErr } = await supabase
-        .schema("preprod")
+        .schema(schema)
         .from("batibarr_clients")
         .select("id, name, entity, address, town, state, country_code, email, phone")
         .eq("id", idTiers)

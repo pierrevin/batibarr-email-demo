@@ -43,12 +43,14 @@ export async function GET(req: Request) {
 
   const campagneId =
     campagneIdRaw && campagneIdRaw.trim().length > 0 ? campagneIdRaw.trim() : null;
+  const sourceRaw = url.searchParams.get("source");
+  const schema = sourceRaw === "preprod" ? "preprod" : "data";
 
   try {
     const supabase = getSupabaseAdmin();
 
     let q = supabase
-      .schema("preprod")
+      .schema(schema)
       .from("batibarr_client_ia")
       .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
       .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
@@ -71,7 +73,7 @@ export async function GET(req: Request) {
     let companies: CompanyRow[] = [];
     if (tierIds.length > 0) {
       const { data, error: companyErr } = await supabase
-        .schema("preprod")
+        .schema(schema)
         .from("batibarr_clients")
         .select("id, name, entity, address, town, state, country_code, email, phone")
         .in("id", tierIds);
