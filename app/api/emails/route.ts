@@ -59,26 +59,6 @@ function pickString(row: Record<string, unknown>, keys: string[]): string | null
   return null;
 }
 
-function pickDateValue(row: Record<string, unknown>): string | null {
-  const keys = [
-    "date_generation",
-    "created_at",
-    "campaign_date",
-    "date",
-    "generated_at",
-    "sent_to_batibarr_date",
-    "start_date",
-  ];
-
-  for (const key of keys) {
-    const value = row[key];
-    if (typeof value === "string" && value.trim().length > 0 && !Number.isNaN(Date.parse(value))) {
-      return value;
-    }
-  }
-  return null;
-}
-
 export async function GET(req: Request) {
   const denied = requireDemoSession(req);
   if (denied) return denied;
@@ -93,38 +73,6 @@ export async function GET(req: Request) {
 
   try {
     const supabase = getSupabaseAdmin();
-    let campaignStartIso: string | null = null;
-    let campaignEndIso: string | null = null;
-
-    if (campagneId) {
-      const { data: campaignRow, error: campaignErr } = await supabase
-        .schema(schema)
-        .from("batibarr_campaigns")
-        .select("*")
-        .eq("id", campagneId)
-        .maybeSingle();
-      if (campaignErr) throw campaignErr;
-
-      if (!campaignRow) {
-        return NextResponse.json({
-          items: [],
-          hasMore: false,
-          stats: {
-            totalCompanies: 0,
-            byRepresentative: [],
-          },
-        });
-      }
-
-      const dateRaw = pickDateValue(campaignRow as Record<string, unknown>);
-      if (dateRaw) {
-        const ts = Date.parse(dateRaw);
-        if (!Number.isNaN(ts)) {
-          campaignStartIso = new Date(ts).toISOString();
-          campaignEndIso = new Date(ts + 60 * 60 * 1000).toISOString();
-        }
-      }
-    }
 
     let q = supabase
       .schema(schema)
@@ -132,9 +80,7 @@ export async function GET(req: Request) {
       .select("id, id_tiers, sent_to_batibarr_date, email_brouillon_sujet, descriptif")
       .order("sent_to_batibarr_date", { ascending: false, nullsFirst: false });
 
-    if (campaignStartIso && campaignEndIso) {
-      q = q.gte("sent_to_batibarr_date", campaignStartIso).lt("sent_to_batibarr_date", campaignEndIso);
-    }
+    if (campagneId) q = q.eq("campagne_id", campagneId);
     q = q.not("descriptif", "is", null).neq("descriptif", "");
 
     const { data: emailRows, error: emailErr } = await q;
