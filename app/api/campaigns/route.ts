@@ -50,9 +50,39 @@ function formatCampaignLabel(id: string, dateRaw: string | null): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     timeZone: "Europe/Paris",
   }).format(dt);
   return `#${id} · ${formatted}`;
+}
+
+function extractDateFromCampaignId(id: string): string | null {
+  const m = id.match(/(\d{8})T(\d{6})/);
+  if (!m) return null;
+  const [, ymd, hms] = m;
+  const y = ymd.slice(0, 4);
+  const mo = ymd.slice(4, 6);
+  const d = ymd.slice(6, 8);
+  const h = hms.slice(0, 2);
+  const mi = hms.slice(2, 4);
+  const s = hms.slice(4, 6);
+  const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
+  const ts = Date.parse(iso);
+  return Number.isNaN(ts) ? null : new Date(ts).toISOString();
+}
+
+function formatCompactDate(dateRaw: string): string {
+  const dt = new Date(dateRaw);
+  if (Number.isNaN(dt.getTime())) return dateRaw;
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Europe/Paris",
+  }).format(dt);
 }
 
 export async function GET(req: Request) {
@@ -96,12 +126,15 @@ export async function GET(req: Request) {
 
     const items = Array.from(latestDateByCampaign.entries())
       .map(([id, dateRaw]) => {
-        const ts = dateRaw ? Date.parse(dateRaw) : Number.NEGATIVE_INFINITY;
+        const idDate = extractDateFromCampaignId(id);
+        const displayDate = idDate ?? dateRaw;
+        const ts = displayDate ? Date.parse(displayDate) : Number.NEGATIVE_INFINITY;
         const numericId = Number.parseInt(id, 10);
         return {
           id,
-          date: dateRaw,
-          label: formatCampaignLabel(id, dateRaw),
+          date: displayDate,
+          idDate: idDate ?? null,
+          label: formatCampaignLabel(id, displayDate),
           sortTs: Number.isNaN(ts) ? Number.NEGATIVE_INFINITY : ts,
           sortId: Number.isNaN(numericId) ? Number.NEGATIVE_INFINITY : numericId,
         };
@@ -110,6 +143,19 @@ export async function GET(req: Request) {
         if (a.sortTs !== b.sortTs) return b.sortTs - a.sortTs;
         return b.sortId - a.sortId;
       });
+
+    // If two campaigns share the same displayed end datetime, append ID timestamp for clarity.
+    const countByDate = new Map<string, number>();
+    for (const item of items) {
+      const key = item.date ?? "__unknown__";
+      countByDate.set(key, (countByDate.get(key) ?? 0) + 1);
+    }
+    for (const item of items) {
+      const key = item.date ?? "__unknown__";
+      if ((countByDate.get(key) ?? 0) <= 1) continue;
+      if (!item.idDate) continue;
+      item.label = `${item.label} · id ${formatCompactDate(item.idDate)}`;
+    }
 
     return NextResponse.json({
       items: items.map(({ id, date, label }) => ({ id, date, label })),
