@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmailDetail } from "@/app/components/EmailDetail";
 import { EmailList } from "@/app/components/EmailList";
 import { ExportButton } from "@/app/components/ExportButton";
-import { StatsPanel } from "@/app/components/StatsPanel";
 import { useReadEmails } from "@/app/hooks/useReadEmails";
 import type {
   CampaignOption,
@@ -416,6 +415,30 @@ export default function Home() {
               </select>
             </div>
 
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-700" htmlFor="repFilter">
+                Commercial
+              </label>
+              <select
+                id="repFilter"
+                className="w-52 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-400"
+                value={selectedRepresentativeId ?? ""}
+                onChange={(e) => setSelectedRepresentativeId(e.target.value || null)}
+                disabled={listLoading}
+              >
+                <option value="">Tous</option>
+                {(stats?.byRepresentative ?? []).map((row) => (
+                  <option key={row.representativeId ?? "unassigned"} value={row.representativeId ?? ""}>
+                    {row.representativeName} ({row.companyCount})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-700">
+              Societes: <span className="font-semibold text-zinc-900">{stats?.totalCompanies ?? 0}</span>
+            </div>
+
             <ExportButton
               items={items}
               readIds={readIds}
@@ -436,7 +459,7 @@ export default function Home() {
         ) : null}
       </header>
 
-      <main className="grid flex-1 min-h-0 grid-cols-[220px_minmax(0,1fr)_220px]">
+      <main className="grid flex-1 min-h-0 grid-cols-[220px_minmax(0,1fr)]">
         <EmailList
           items={filteredItems}
           selectedId={selectedId}
@@ -461,13 +484,6 @@ export default function Home() {
           prevDisabled={offset <= 0 && atFirst}
           nextDisabled={filteredItems.length === 0 || (atLast && !hasMore)}
           listLoading={listLoading}
-        />
-
-        <StatsPanel
-          stats={stats}
-          loading={listLoading}
-          selectedRepresentativeId={selectedRepresentativeId}
-          onSelectRepresentative={setSelectedRepresentativeId}
         />
       </main>
     </div>
