@@ -126,10 +126,18 @@ export default function Home() {
         const params = new URLSearchParams();
         params.set("source", source);
         const data = await fetchJson<{ items: CampaignOption[] }>(`/api/campaigns?${params.toString()}`);
-        setCampaigns(data.items ?? []);
+        const nextCampaigns = data.items ?? [];
+        setCampaigns(nextCampaigns);
+        // Par defaut: selectionner la campagne la plus recente.
+        if (nextCampaigns.length > 0) {
+          setCampaignId(nextCampaigns[0].id);
+        } else {
+          setCampaignId("");
+        }
       } catch (e) {
         setCampaigns([]);
         setCampaignsError(e instanceof Error ? e.message : String(e));
+        setCampaignId("");
       } finally {
         setCampaignsLoading(false);
       }
